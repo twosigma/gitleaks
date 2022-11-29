@@ -34,8 +34,6 @@ const (
 	DetectType GitScanType = iota
 	ProtectType
 	ProtectStagedType
-
-	gitleaksAllowSignature = "gitleaks:allow"
 )
 
 // Detector is the main detector struct
@@ -231,6 +229,7 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 	}
 
 	matchIndices := rule.Regex.FindAllStringIndex(fragment.Raw, -1)
+
 	for _, matchIndex := range matchIndices {
 		// extract secret from match
 		secret := strings.Trim(fragment.Raw[matchIndex[0]:matchIndex[1]], "\n")
@@ -257,11 +256,11 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 			Secret:      secret,
 			Match:       secret,
 			Tags:        rule.Tags,
-			Line:        fragment.Raw[loc.startLineIndex:loc.endLineIndex],
+			Lines:       fragment.Raw[loc.startLineIndex:loc.endLineIndex],
 		}
 
-		if strings.Contains(fragment.Raw[loc.startLineIndex:loc.endLineIndex],
-			gitleaksAllowSignature) {
+		// check if the lines enclosing a finding contain any matches in the enclosing lines allowlist.
+		if rule.Allowlist.EnclosingLinesRegexAllowed(finding.Lines) || d.Config.Allowlist.EnclosingLinesRegexAllowed(finding.Lines) {
 			continue
 		}
 

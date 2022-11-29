@@ -18,6 +18,7 @@ var DefaultConfig string
 var extendDepth int
 
 const maxExtendDepth = 2
+const gitleaksAllowSignature = "gitleaks:allow"
 
 // ViperConfig is the config struct used by the Viper config package
 // to parse the config file. This struct does not include regular expressions.
@@ -36,17 +37,19 @@ type ViperConfig struct {
 		Tags        []string
 
 		Allowlist struct {
-			Regexes   []string
-			Paths     []string
-			Commits   []string
-			StopWords []string
+			Regexes               []string
+			EnclosingLinesRegexes []string
+			Paths                 []string
+			Commits               []string
+			StopWords             []string
 		}
 	}
 	Allowlist struct {
-		Regexes   []string
-		Paths     []string
-		Commits   []string
-		StopWords []string
+		Regexes               []string
+		EnclosingLinesRegexes []string
+		Paths                 []string
+		Commits               []string
+		StopWords             []string
 	}
 }
 
@@ -79,14 +82,10 @@ func (vc *ViperConfig) Translate() (Config, error) {
 	rulesMap := make(map[string]Rule)
 
 	for _, r := range vc.Rules {
-		var allowlistRegexes []*regexp.Regexp
-		for _, a := range r.Allowlist.Regexes {
-			allowlistRegexes = append(allowlistRegexes, regexp.MustCompile(a))
-		}
-		var allowlistPaths []*regexp.Regexp
-		for _, a := range r.Allowlist.Paths {
-			allowlistPaths = append(allowlistPaths, regexp.MustCompile(a))
-		}
+
+		allowlistRegexes := compileRegexPatterns(r.Allowlist.Regexes)
+		allowlistEnclosingLinesRegexes := compileRegexPatterns(r.Allowlist.EnclosingLinesRegexes)
+		allowlistPaths := compileRegexPatterns(r.Allowlist.Paths)
 
 		if r.Keywords == nil {
 			r.Keywords = []string{}
@@ -122,10 +121,11 @@ func (vc *ViperConfig) Translate() (Config, error) {
 			Tags:        r.Tags,
 			Keywords:    r.Keywords,
 			Allowlist: Allowlist{
-				Regexes:   allowlistRegexes,
-				Paths:     allowlistPaths,
-				Commits:   r.Allowlist.Commits,
-				StopWords: r.Allowlist.StopWords,
+				Regexes:               allowlistRegexes,
+				EnclosingLinesRegexes: allowlistEnclosingLinesRegexes,
+				Paths:                 allowlistPaths,
+				Commits:               r.Allowlist.Commits,
+				StopWords:             r.Allowlist.StopWords,
 			},
 		}
 		orderedRules = append(orderedRules, r.RuleID)
@@ -135,23 +135,23 @@ func (vc *ViperConfig) Translate() (Config, error) {
 		}
 		rulesMap[r.RuleID] = r
 	}
-	var allowlistRegexes []*regexp.Regexp
-	for _, a := range vc.Allowlist.Regexes {
-		allowlistRegexes = append(allowlistRegexes, regexp.MustCompile(a))
-	}
-	var allowlistPaths []*regexp.Regexp
-	for _, a := range vc.Allowlist.Paths {
-		allowlistPaths = append(allowlistPaths, regexp.MustCompile(a))
-	}
+
+	allowlistRegexes := compileRegexPatterns(vc.Allowlist.Regexes)
+	allowlistPaths := compileRegexPatterns(vc.Allowlist.Paths)
+
+	enclosingLinesPatterns := append(vc.Allowlist.EnclosingLinesRegexes, gitleaksAllowSignature)
+	allowlistEnclosingLinesRegexes := compileRegexPatterns(enclosingLinesPatterns)
+
 	c := Config{
 		Description: vc.Description,
 		Extend:      vc.Extend,
 		Rules:       rulesMap,
 		Allowlist: Allowlist{
-			Regexes:   allowlistRegexes,
-			Paths:     allowlistPaths,
-			Commits:   vc.Allowlist.Commits,
-			StopWords: vc.Allowlist.StopWords,
+			Regexes:               allowlistRegexes,
+			EnclosingLinesRegexes: allowlistEnclosingLinesRegexes,
+			Paths:                 allowlistPaths,
+			Commits:               vc.Allowlist.Commits,
+			StopWords:             vc.Allowlist.StopWords,
 		},
 		Keywords:     keywords,
 		orderedRules: orderedRules,
@@ -171,6 +171,15 @@ func (vc *ViperConfig) Translate() (Config, error) {
 	}
 
 	return c, nil
+}
+
+func compileRegexPatterns(patterns []string) []*regexp.Regexp {
+	var compiledRegexes []*regexp.Regexp
+	for _, pattern := range patterns {
+		compiledRegexes = append(compiledRegexes, regexp.MustCompile(pattern))
+	}
+
+	return compiledRegexes
 }
 
 func (c *Config) OrderedRules() []Rule {
@@ -246,4 +255,6 @@ func (c *Config) extend(extensionConfig Config) {
 		extensionConfig.Allowlist.Paths...)
 	c.Allowlist.Regexes = append(c.Allowlist.Regexes,
 		extensionConfig.Allowlist.Regexes...)
+	c.Allowlist.EnclosingLinesRegexes = append(c.Allowlist.EnclosingLinesRegexes,
+		extensionConfig.Allowlist.EnclosingLinesRegexes...)
 }
