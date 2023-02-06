@@ -48,10 +48,6 @@ func init() {
 	rootCmd.PersistentFlags().Int("max-target-megabytes", 0, "files larger than this will be skipped")
 	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
 	rootCmd.PersistentFlags().Bool("no-banner", false, "suppress banner")
-	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	if err != nil {
-		log.Fatal().Msgf("err binding config %s", err.Error())
-	}
 }
 
 func initLog() {
