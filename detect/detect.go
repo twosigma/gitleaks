@@ -400,28 +400,40 @@ type scanTarget struct {
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	// TODO: Use a non-constant number of workers.
-	s := semgroup.NewGroup(context.Background(), 4)
-	paths := make(chan scanTarget)
+	sourcePathIterators := semgroup.NewGroup(context.Background(), 4)
+	paths := make([]scanTarget, 8)
+	pathsMu := sync.Mutex{}
 
 	// Walk over each source path
-	for _, source := range sources {
-		s.Go(func() error {
+	for index, source := range sources {
+		sourcePathIterators.Go(func() error {
+			log.Debug().Msgf("Hello %v", index)
+
 			return filepath.Walk(source,
 				func(path string, fInfo os.FileInfo, err error) error {
 					if err != nil {
+						log.Debug().Msgf("Ret err %v", path)
 						return err
 					}
 					if fInfo.Name() == ".git" && fInfo.IsDir() {
+						log.Debug().Msgf("Ret fp skipdir %v", path)
 						return filepath.SkipDir
 					}
 					if fInfo.Size() == 0 {
+						log.Debug().Msgf("Ret nil %v", path)
 						return nil
 					}
 					if fInfo.Mode().IsRegular() {
-						paths <- scanTarget{
-							Path:    path,
-							Symlink: "",
-						}
+						log.Debug().Msgf("Add path %v", path)
+						pathsMu.Lock()
+						paths = append(paths,
+							scanTarget{
+								Path:    path,
+								Symlink: "",
+							})
+						pathsMu.Unlock()
+
+						log.Debug().Msgf("Finished adding path %v", path)
 					}
 					if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
 						realPath, err := filepath.EvalSymlinks(path)
@@ -429,14 +441,19 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 							return err
 						}
 						realPathFileInfo, _ := os.Stat(realPath)
+
 						if realPathFileInfo.IsDir() {
 							log.Debug().Msgf("found symlinked directory: %s -> %s [skipping]", path, realPath)
 							return nil
 						}
-						paths <- scanTarget{
-							Path:    realPath,
-							Symlink: path,
-						}
+
+						pathsMu.Lock()
+						paths = append(paths,
+							scanTarget{
+								Path:    realPath,
+								Symlink: path,
+							})
+						pathsMu.Unlock()
 					}
 					return nil
 				})
@@ -444,17 +461,18 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	}
 
 	// Wait for all paths to be enumerated.
-	err := s.Wait()
+	err := sourcePathIterators.Wait()
 	if err != nil {
+		log.Debug().Msgf("Finished with error")
 		return d.findings, err
 	}
 
-	close(paths)
+	pathIterators := semgroup.NewGroup(context.Background(), 4)
 
 	// Scan each file concurrently
-	for pa := range paths {
+	for _, pa := range paths {
 		p := pa
-		s.Go(func() error {
+		pathIterators.Go(func() error {
 			b, err := os.ReadFile(p.Path)
 			if err != nil {
 				return err
@@ -486,7 +504,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 		})
 	}
 
-	if err := s.Wait(); err != nil {
+	if err := pathIterators.Wait(); err != nil {
 		return d.findings, err
 	}
 
