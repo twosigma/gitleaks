@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -29,6 +28,7 @@ var detectCmd = &cobra.Command{
 }
 
 func runDetect(cmd *cobra.Command, args []string) {
+	// TODO: Validate this works when pipe occurs.
 	sourcePaths := config.LoadSourcePaths(args)
 	initConfig(sourcePaths)
 	var (
@@ -74,20 +74,29 @@ func runDetect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("")
 	}
 
-	if fileExists(filepath.Join(source, ".gitleaksignore")) {
-		if err = detector.AddGitleaksIgnore(filepath.Join(source, ".gitleaksignore")); err != nil {
-			log.Fatal().Err(err).Msg("could not call AddGitleaksIgnore")
-		}
-	}
+	// TODO: Move this logic to pipe, and git section.
+	// In other mode, iterate over all files looking for .gitleaksignore.
+	// How should .gitleaksignore be handled?
+	// For pipe and git, no change.
+	// For no-git mode, it should look for source.gitleaksignore if there's only one path.
+	// If there are multiple paths, it needs to be passed as a command line flag.
+	// Potential: I could update it so that if exactly one .gitleaksignore is found, or passed as param, use that
+	// This needs more thought...
 
-	// ignore findings from the baseline (an existing report in json format generated earlier)
-	baselinePath, _ := cmd.Flags().GetString("baseline-path")
-	if baselinePath != "" {
-		err = detector.AddBaseline(baselinePath)
-		if err != nil {
-			log.Error().Msgf("Could not load baseline. The path must point of a gitleaks report generated using the default format: %s", err)
-		}
-	}
+	//if fileExists(filepath.Join(source, ".gitleaksignore")) {
+	//	if err = detector.AddGitleaksIgnore(filepath.Join(source, ".gitleaksignore")); err != nil {
+	//		log.Fatal().Err(err).Msg("could not call AddGitleaksIgnore")
+	//	}
+	//}
+
+	// TODO: ignore findings from the baseline (an existing report in json format generated earlier)
+	//baselinePath, _ := cmd.Flags().GetString("baseline-path")
+	//if baselinePath != "" {
+	//	err = detector.AddBaseline(baselinePath)
+	//	if err != nil {
+	//		log.Error().Msgf("Could not load baseline. The path must point of a gitleaks report generated using the default format: %s", err)
+	//	}
+	//}
 
 	// set follow symlinks flag
 	if detector.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks"); err != nil {
@@ -114,7 +123,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 
 	// start the detector scan
 	if noGit {
-		findings, err = detector.DetectFiles(source)
+		findings, err = detector.DetectFiles(sourcePaths)
 		if err != nil {
 			// don't exit on error, just log it
 			log.Error().Err(err).Msg("")
@@ -132,7 +141,8 @@ func runDetect(cmd *cobra.Command, args []string) {
 		if err != nil {
 			log.Fatal().Err(err).Msg("")
 		}
-		findings, err = detector.DetectGit(source, logOpts, detect.DetectType)
+		// TODO: Add an args function that check that if we are scanning git repo it implies there is only one source.
+		findings, err = detector.DetectGit(sourcePaths[0], logOpts, detect.DetectType)
 		if err != nil {
 			// don't exit on error, just log it
 			log.Error().Err(err).Msg("")
