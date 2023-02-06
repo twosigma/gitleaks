@@ -398,46 +398,60 @@ type scanTarget struct {
 
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
-func (d *Detector) DetectFiles(source string) ([]report.Finding, error) {
+func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
+	// TODO: Use a non-constant number of workers.
 	s := semgroup.NewGroup(context.Background(), 4)
 	paths := make(chan scanTarget)
-	s.Go(func() error {
-		defer close(paths)
-		return filepath.Walk(source,
-			func(path string, fInfo os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-				if fInfo.Name() == ".git" && fInfo.IsDir() {
-					return filepath.SkipDir
-				}
-				if fInfo.Size() == 0 {
-					return nil
-				}
-				if fInfo.Mode().IsRegular() {
-					paths <- scanTarget{
-						Path:    path,
-						Symlink: "",
-					}
-				}
-				if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
-					realPath, err := filepath.EvalSymlinks(path)
+
+	// Walk over each source path
+	for _, source := range sources {
+		s.Go(func() error {
+			return filepath.Walk(source,
+				func(path string, fInfo os.FileInfo, err error) error {
 					if err != nil {
 						return err
 					}
-					realPathFileInfo, _ := os.Stat(realPath)
-					if realPathFileInfo.IsDir() {
-						log.Debug().Msgf("found symlinked directory: %s -> %s [skipping]", path, realPath)
+					if fInfo.Name() == ".git" && fInfo.IsDir() {
+						return filepath.SkipDir
+					}
+					if fInfo.Size() == 0 {
 						return nil
 					}
-					paths <- scanTarget{
-						Path:    realPath,
-						Symlink: path,
+					if fInfo.Mode().IsRegular() {
+						paths <- scanTarget{
+							Path:    path,
+							Symlink: "",
+						}
 					}
-				}
-				return nil
-			})
-	})
+					if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
+						realPath, err := filepath.EvalSymlinks(path)
+						if err != nil {
+							return err
+						}
+						realPathFileInfo, _ := os.Stat(realPath)
+						if realPathFileInfo.IsDir() {
+							log.Debug().Msgf("found symlinked directory: %s -> %s [skipping]", path, realPath)
+							return nil
+						}
+						paths <- scanTarget{
+							Path:    realPath,
+							Symlink: path,
+						}
+					}
+					return nil
+				})
+		})
+	}
+
+	// Wait for all paths to be enumerated.
+	err := s.Wait()
+	if err != nil {
+		return d.findings, err
+	}
+
+	close(paths)
+
+	// Scan each file concurrently
 	for pa := range paths {
 		p := pa
 		s.Go(func() error {
