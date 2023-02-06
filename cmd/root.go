@@ -94,7 +94,7 @@ func initConfig(sourcePaths []string) {
 		log.Debug().Msgf("using gitleaks config from GITLEAKS_CONFIG env var: %s", envPath)
 	} else {
 
-		if len(sourcePaths) == 1 {
+		if len(sourcePaths) > 1 {
 			log.Warn().Msg("multiple source files passed without explicitly specifying gitleaks configuration! using default config")
 			config.LoadDefaultViperConfig()
 			return
