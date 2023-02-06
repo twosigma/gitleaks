@@ -405,10 +405,8 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	pathsMu := sync.Mutex{}
 
 	// Walk over each source path
-	for index, source := range sources {
+	for _, source := range sources {
 		sourcePathIterators.Go(func() error {
-			log.Debug().Msgf("Hello %v", index)
-
 			return filepath.Walk(source,
 				func(path string, fInfo os.FileInfo, err error) error {
 					if err != nil {
