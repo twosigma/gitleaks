@@ -115,7 +115,7 @@ func initConfig(sourcePaths []string) {
 			return
 		}
 
-		if _, err := os.Stat(filepath.Join(source, ".gitleaks.toml")); os.IsNotExist(err) {
+		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
 			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", sourcePath)
 			config.LoadDefaultViperConfig()
 			return
