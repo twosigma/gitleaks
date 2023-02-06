@@ -266,3 +266,11 @@ func (c *Config) extend(extensionConfig Config) {
 	c.Allowlist.EnclosingLinesRegexes = append(c.Allowlist.EnclosingLinesRegexes,
 		extensionConfig.Allowlist.EnclosingLinesRegexes...)
 }
+
+func LoadSourcePaths(sources []string) []string {
+	if len(sources) == 0 {
+		return []string{"."}
+	}
+
+	return sources
+}

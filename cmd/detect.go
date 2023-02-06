@@ -29,7 +29,8 @@ var detectCmd = &cobra.Command{
 }
 
 func runDetect(cmd *cobra.Command, args []string) {
-	initConfig()
+	sourcePaths := config.LoadSourcePaths(args)
+	initConfig(sourcePaths)
 	var (
 		vc       config.ViperConfig
 		findings []report.Finding
@@ -44,6 +45,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
+	// TODO: Make Path a list of paths.
 	cfg.Path, _ = cmd.Flags().GetString("config")
 
 	// start timer
