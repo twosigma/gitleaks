@@ -27,7 +27,8 @@ var protectCmd = &cobra.Command{
 }
 
 func runProtect(cmd *cobra.Command, args []string) {
-	initConfig()
+	sourcePaths := config.LoadSourcePaths(args)
+	initConfig(sourcePaths)
 	var vc config.ViperConfig
 
 	if err := viper.Unmarshal(&vc); err != nil {
