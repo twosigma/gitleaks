@@ -401,7 +401,7 @@ type scanTarget struct {
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	// TODO: Use a non-constant number of workers.
 	sourcePathIterators := semgroup.NewGroup(context.Background(), 4)
-	paths := make([]scanTarget, 8)
+	paths := make([]scanTarget, 0)
 	pathsMu := sync.Mutex{}
 
 	// Walk over each source path
@@ -412,19 +412,15 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 			return filepath.Walk(source,
 				func(path string, fInfo os.FileInfo, err error) error {
 					if err != nil {
-						log.Debug().Msgf("Ret err %v", path)
 						return err
 					}
 					if fInfo.Name() == ".git" && fInfo.IsDir() {
-						log.Debug().Msgf("Ret fp skipdir %v", path)
 						return filepath.SkipDir
 					}
 					if fInfo.Size() == 0 {
-						log.Debug().Msgf("Ret nil %v", path)
 						return nil
 					}
 					if fInfo.Mode().IsRegular() {
-						log.Debug().Msgf("Add path %v", path)
 						pathsMu.Lock()
 						paths = append(paths,
 							scanTarget{
@@ -432,8 +428,6 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 								Symlink: "",
 							})
 						pathsMu.Unlock()
-
-						log.Debug().Msgf("Finished adding path %v", path)
 					}
 					if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
 						realPath, err := filepath.EvalSymlinks(path)
