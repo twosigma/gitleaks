@@ -61,11 +61,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
-	// if config path is not set, then use the {source}/.gitleaks.toml path.
-	// note that there may not be a `{source}/.gitleaks.toml` file, this is ok.
-	if detector.Config.Path == "" {
-		detector.Config.Path = filepath.Join(source, ".gitleaks.toml")
-	}
+
 	// set verbose flag
 	if detector.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
 		log.Fatal().Err(err).Msg("")
