@@ -20,7 +20,8 @@ func init() {
 	detectCmd.Flags().Bool("no-git", false, "treat git repo as a regular directory and scan those files, --log-opts has no effect on the scan when --no-git is set")
 	detectCmd.Flags().Bool("pipe", false, "scan input from stdin, ex: `cat some_file | gitleaks detect --pipe`")
 	detectCmd.Flags().Bool("follow-symlinks", false, "scan files that are symlinks to other files")
-	detectCmd.Flags().StringSlice("gitleaks-ignore", []string{}, "Pass path to gitleaks ignore file.")
+	detectCmd.Flags().StringSlice("gitleaks-ignore", []string{}, "Pass paths to gitleaks ignore files explicitly.")
+	detectCmd.Flags().StringSlice("baseline", []string{}, "Pass path to gitleaks ignore files explicitly.")
 }
 
 var detectCmd = &cobra.Command{
@@ -98,13 +99,13 @@ func runDetect(cmd *cobra.Command, args []string) {
 	// This needs more thought...
 
 	// Add all gitleaksignore paths passed manually
-
 	ignorePaths, _ := cmd.Flags().GetStringSlice("gitleaks-ignore")
 	if !noGitMode {
 		// Check the root directory for .gitleaksignore file.
 		ignorePaths = append(ignorePaths, filepath.Join(sourcePaths[0], ".gitleaksignore"))
 	}
 
+	// Configure detector to ignore all provided paths.
 	for _, path := range ignorePaths {
 		// TODO: Make sure this works for absolute and relative paths. Make sure it works when gitleaks is invoked from another dir.
 		if err = detector.AddGitleaksIgnore(path); err != nil {

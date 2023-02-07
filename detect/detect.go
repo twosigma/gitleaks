@@ -401,8 +401,7 @@ type scanTarget struct {
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	// TODO: Use a non-constant number of workers.
 	sourcePathIterators := semgroup.NewGroup(context.Background(), 4)
-	paths := make([]scanTarget, 0)
-	pathsMu := sync.Mutex{}
+	paths := NewThreadSafeSlice(make([]scanTarget, 0))
 
 	// Walk over each source path
 	for _, source := range sources {
@@ -434,13 +433,11 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 						}
 
 						// Otherwise, scan the file
-						pathsMu.Lock()
-						paths = append(paths,
+						paths.append(
 							scanTarget{
 								Path:    path,
 								Symlink: "",
 							})
-						pathsMu.Unlock()
 					}
 					if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
 						realPath, err := filepath.EvalSymlinks(path)
@@ -454,13 +451,10 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 							return nil
 						}
 
-						pathsMu.Lock()
-						paths = append(paths,
-							scanTarget{
-								Path:    realPath,
-								Symlink: path,
-							})
-						pathsMu.Unlock()
+						paths.append(scanTarget{
+							Path:    realPath,
+							Symlink: path,
+						})
 					}
 					return nil
 				})
@@ -477,7 +471,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	pathIterators := semgroup.NewGroup(context.Background(), 4)
 
 	// Scan each file concurrently
-	for _, pa := range paths {
+	for _, pa := range paths.slice {
 		p := pa
 		pathIterators.Go(func() error {
 			b, err := os.ReadFile(p.Path)
