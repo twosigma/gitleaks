@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -19,6 +20,7 @@ func init() {
 	detectCmd.Flags().Bool("no-git", false, "treat git repo as a regular directory and scan those files, --log-opts has no effect on the scan when --no-git is set")
 	detectCmd.Flags().Bool("pipe", false, "scan input from stdin, ex: `cat some_file | gitleaks detect --pipe`")
 	detectCmd.Flags().Bool("follow-symlinks", false, "scan files that are symlinks to other files")
+	detectCmd.Flags().StringSlice("gitleaks-ignore", []string{}, "Pass path to gitleaks ignore file.")
 }
 
 var detectCmd = &cobra.Command{
@@ -73,6 +75,19 @@ func runDetect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("")
 	}
 
+	// determine what type of scan:
+	// - git: scan the history of the repo
+	// - no-git: scan files by treating the repo as a plain directory
+	noGitMode, err := cmd.Flags().GetBool("no-git")
+	if err != nil {
+		log.Fatal().Err(err).Msg("could not call GetBool() for no-git")
+	}
+
+	pipeMode, err := cmd.Flags().GetBool("pipe")
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+
 	// TODO: Move this logic to pipe, and git section.
 	// In other mode, iterate over all files looking for .gitleaksignore.
 	// How should .gitleaksignore be handled?
@@ -82,15 +97,24 @@ func runDetect(cmd *cobra.Command, args []string) {
 	// Potential: I could update it so that if exactly one .gitleaksignore is found, or passed as param, use that
 	// This needs more thought...
 
-	//if fileExists(filepath.Join(source, ".gitleaksignore")) {
-	//	if err = detector.AddGitleaksIgnore(filepath.Join(source, ".gitleaksignore")); err != nil {
-	//		log.Fatal().Err(err).Msg("could not call AddGitleaksIgnore")
-	//	}
-	//}
+	// Add all gitleaksignore paths passed manually
+
+	ignorePaths, _ := cmd.Flags().GetStringSlice("gitleaks-ignore")
+	if !noGitMode {
+		// Check the root directory for .gitleaksignore file.
+		ignorePaths = append(ignorePaths, filepath.Join(sourcePaths[0], ".gitleaksignore"))
+	}
+
+	for _, path := range ignorePaths {
+		// TODO: Make sure this works for absolute and relative paths. Make sure it works when gitleaks is invoked from another dir.
+		if err = detector.AddGitleaksIgnore(path); err != nil {
+			log.Fatal().Err(err).Msg("could not call AddGitleaksIgnore")
+		}
+	}
 
 	// TODO: ignore findings from the baseline (an existing report in json format generated earlier)
-	//baselinePath, _ := cmd.Flags().GetString("baseline-path")
-	//if baselinePath != "" {
+	// baselinePath, _ := cmd.Flags().GetString("baseline-path")
+	// if baselinePath != "" {
 	//	err = detector.AddBaseline(baselinePath)
 	//	if err != nil {
 	//		log.Error().Msgf("Could not load baseline. The path must point of a gitleaks report generated using the default format: %s", err)
@@ -108,33 +132,21 @@ func runDetect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("could not get exit code")
 	}
 
-	// determine what type of scan:
-	// - git: scan the history of the repo
-	// - no-git: scan files by treating the repo as a plain directory
-	noGit, err := cmd.Flags().GetBool("no-git")
-	if err != nil {
-		log.Fatal().Err(err).Msg("could not call GetBool() for no-git")
-	}
-	fromPipe, err := cmd.Flags().GetBool("pipe")
-	if err != nil {
-		log.Fatal().Err(err)
-	}
-
-	// start the detector scan
-	if noGit {
+	switch {
+	case noGitMode:
 		findings, err = detector.DetectFiles(sourcePaths)
 		if err != nil {
 			// don't exit on error, just log it
 			log.Error().Err(err).Msg("")
 		}
-	} else if fromPipe {
+	case pipeMode:
 		findings, err = detector.DetectReader(os.Stdin, 10)
 		if err != nil {
 			// log fatal to exit, no need to continue since a report
 			// will not be generated when scanning from a pipe...for now
 			log.Fatal().Err(err).Msg("")
 		}
-	} else {
+	default: // Default to scanning as git repository.
 		var logOpts string
 		logOpts, err = cmd.Flags().GetString("log-opts")
 		if err != nil {
@@ -146,23 +158,14 @@ func runDetect(cmd *cobra.Command, args []string) {
 			// don't exit on error, just log it
 			log.Error().Err(err).Msg("")
 		}
+
 	}
 
 	// log info about the scan
 	if err == nil {
-		log.Info().Msgf("scan completed in %s", FormatDuration(time.Since(start)))
-		if len(findings) != 0 {
-			log.Warn().Msgf("leaks found: %d", len(findings))
-		} else {
-			log.Info().Msg("no leaks found")
-		}
+		logScanSuccess(start, findings)
 	} else {
-		log.Warn().Msgf("partial scan completed in %s", FormatDuration(time.Since(start)))
-		if len(findings) != 0 {
-			log.Warn().Msgf("%d leaks found in partial scan", len(findings))
-		} else {
-			log.Warn().Msg("no leaks found in partial scan")
-		}
+		logScanFailure(start, findings)
 	}
 
 	// write report if desired
@@ -183,26 +186,29 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 }
 
-func fileExists(fileName string) bool {
-	// check for a .gitleaksignore file
-	info, err := os.Stat(fileName)
-	if err != nil && !os.IsNotExist(err) {
-		return false
+func logScanFailure(start time.Time, findings []report.Finding) {
+	log.Warn().Msgf("partial scan completed in %s", FormatDuration(time.Since(start)))
+	if len(findings) != 0 {
+		log.Warn().Msgf("%d leaks found in partial scan", len(findings))
+	} else {
+		log.Warn().Msg("no leaks found in partial scan")
 	}
+}
 
-	if info != nil && err == nil {
-		if !info.IsDir() {
-			return true
-		}
+func logScanSuccess(start time.Time, findings []report.Finding) {
+	log.Info().Msgf("scan completed in %s", FormatDuration(time.Since(start)))
+	if len(findings) != 0 {
+		log.Warn().Msgf("leaks found: %d", len(findings))
+	} else {
+		log.Info().Msg("no leaks found")
 	}
-	return false
 }
 
 func FormatDuration(d time.Duration) string {
 	scale := 100 * time.Second
 	// look for the max scale that is smaller than d
 	for scale > d {
-		scale = scale / 10
+		scale /= 10
 	}
 	return d.Round(scale / 100).String()
 }

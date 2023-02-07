@@ -243,10 +243,6 @@ func (c *Config) extendPath() {
 	c.extend(cfg)
 }
 
-func (c *Config) extendURL() {
-	// TODO
-}
-
 func (c *Config) extend(extensionConfig Config) {
 	for ruleID, rule := range extensionConfig.Rules {
 		if _, ok := c.Rules[ruleID]; !ok {

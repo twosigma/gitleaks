@@ -142,12 +142,12 @@ func NewDetectorDefaultConfig() (*Detector, error) {
 }
 
 func (d *Detector) AddGitleaksIgnore(gitleaksIgnorePath string) error {
-	log.Debug().Msg("found .gitleaksignore file")
 	file, err := os.Open(gitleaksIgnorePath)
 
 	if err != nil {
 		return err
 	}
+	log.Debug().Msg("found .gitleaksignore file")
 
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -419,6 +419,21 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 						return nil
 					}
 					if fInfo.Mode().IsRegular() {
+						// If the file is a .gitleaksignore file, add it to known fingerprints
+						match, err := filepath.Match("*/?.gitleaksignore", path)
+						if err != nil {
+							return err
+						}
+
+						// Matches .gitleaksignore file.
+						if match {
+							if err := d.AddGitleaksIgnore(path); err == nil {
+								return nil
+							}
+							log.Warn().Msgf("Failed to load gitleaks ignore file at %v", path)
+						}
+
+						// Otherwise, scan the file
 						pathsMu.Lock()
 						paths = append(paths,
 							scanTarget{

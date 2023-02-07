@@ -515,11 +515,11 @@ func TestFromGit(t *testing.T) {
 func TestFromFiles(t *testing.T) {
 	tests := []struct {
 		cfgName          string
-		source           string
+		sources          []string
 		expectedFindings []report.Finding
 	}{
 		{
-			source:  filepath.Join(repoBasePath, "nogit"),
+			sources: []string{filepath.Join(repoBasePath, "nogit")},
 			cfgName: "simple",
 			expectedFindings: []report.Finding{
 				{
@@ -541,7 +541,7 @@ func TestFromFiles(t *testing.T) {
 			},
 		},
 		{
-			source:  filepath.Join(repoBasePath, "nogit", "main.go"),
+			sources: []string{filepath.Join(repoBasePath, "nogit", "main.go")},
 			cfgName: "simple",
 			expectedFindings: []report.Finding{
 				{
@@ -580,7 +580,7 @@ func TestFromFiles(t *testing.T) {
 		cfg, _ := vc.Translate()
 		detector := NewDetector(cfg)
 		detector.FollowSymlinks = true
-		findings, err := detector.DetectFiles(tt.source)
+		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
 		}
@@ -592,11 +592,11 @@ func TestFromFiles(t *testing.T) {
 func TestDetectWithSymlinks(t *testing.T) {
 	tests := []struct {
 		cfgName          string
-		source           string
+		sources          []string
 		expectedFindings []report.Finding
 	}{
 		{
-			source:  filepath.Join(repoBasePath, "symlinks/file_symlink"),
+			sources: []string{filepath.Join(repoBasePath, "symlinks/file_symlink")},
 			cfgName: "simple",
 			expectedFindings: []report.Finding{
 				{
@@ -636,7 +636,7 @@ func TestDetectWithSymlinks(t *testing.T) {
 		cfg, _ := vc.Translate()
 		detector := NewDetector(cfg)
 		detector.FollowSymlinks = true
-		findings, err := detector.DetectFiles(tt.source)
+		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
 		}

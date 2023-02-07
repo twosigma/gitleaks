@@ -85,15 +85,16 @@ func initConfig(sourcePaths []string) {
 	if err != nil {
 		log.Fatal().Msg(err.Error())
 	}
-	if cfgPath != "" {
+
+	switch {
+	case cfgPath != "":
 		viper.SetConfigFile(cfgPath)
 		log.Debug().Msgf("using gitleaks config %s from `--config`", cfgPath)
-	} else if os.Getenv("GITLEAKS_CONFIG") != "" {
+	case os.Getenv("GITLEAKS_CONFIG") != "":
 		envPath := os.Getenv("GITLEAKS_CONFIG")
 		viper.SetConfigFile(envPath)
 		log.Debug().Msgf("using gitleaks config from GITLEAKS_CONFIG env var: %s", envPath)
-	} else {
-
+	default:
 		if len(sourcePaths) > 1 {
 			log.Warn().Msg("multiple source files passed without explicitly specifying gitleaks configuration! using default config")
 			config.LoadDefaultViperConfig()
