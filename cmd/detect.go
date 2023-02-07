@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,7 +22,6 @@ func init() {
 	detectCmd.Flags().Bool("pipe", false, "scan input from stdin, ex: `cat some_file | gitleaks detect --pipe`")
 	detectCmd.Flags().Bool("follow-symlinks", false, "scan files that are symlinks to other files")
 	detectCmd.Flags().StringSlice("gitleaks-ignore", []string{}, "Pass paths to gitleaks ignore files explicitly.")
-	detectCmd.Flags().StringSlice("baseline", []string{}, "Pass path to gitleaks ignore files explicitly.")
 }
 
 var detectCmd = &cobra.Command{
@@ -90,14 +90,6 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	// TODO: Move this logic to pipe, and git section.
-	// In other mode, iterate over all files looking for .gitleaksignore.
-	// How should .gitleaksignore be handled?
-	// For pipe and git, no change.
-	// For no-git mode, it should look for source.gitleaksignore if there's only one path.
-	// If there are multiple paths, it needs to be passed as a command line flag.
-	// Potential: I could update it so that if exactly one .gitleaksignore is found, or passed as param, use that
-	// This needs more thought...
-
 	// Add all gitleaksignore paths passed manually
 	ignorePaths, _ := cmd.Flags().GetStringSlice("gitleaks-ignore")
 	if !noGitMode {
@@ -105,22 +97,34 @@ func runDetect(cmd *cobra.Command, args []string) {
 		ignorePaths = append(ignorePaths, filepath.Join(sourcePaths[0], ".gitleaksignore"))
 	}
 
+	noExitOnFailedIgnore, _ := cmd.Flags().GetBool("no-exit-on-failed-ignore")
 	// Configure detector to ignore all provided paths.
-	for _, path := range ignorePaths {
+	for _, ignorePath := range ignorePaths {
 		// TODO: Make sure this works for absolute and relative paths. Make sure it works when gitleaks is invoked from another dir.
-		if err = detector.AddGitleaksIgnore(path); err != nil {
-			log.Fatal().Err(err).Msg("could not call AddGitleaksIgnore")
+		if err = detector.AddGitleaksIgnore(ignorePath); err != nil {
+			errMsg := fmt.Sprintf("Failed to register ignore file `%s` due to error: %s.", ignorePath, err)
+			if !noExitOnFailedIgnore {
+				log.Fatal().Msg(errMsg + "Use --no-exit-on-failed-ignore to continue scanning anyways.")
+			}
+
+			log.Error().Msg(errMsg)
 		}
 	}
 
+	noExitOnFailedBaseline, _ := cmd.Flags().GetBool("no-exit-on-failed-baseline")
 	// TODO: ignore findings from the baseline (an existing report in json format generated earlier)
-	// baselinePath, _ := cmd.Flags().GetString("baseline-path")
-	// if baselinePath != "" {
-	//	err = detector.AddBaseline(baselinePath)
-	//	if err != nil {
-	//		log.Error().Msgf("Could not load baseline. The path must point of a gitleaks report generated using the default format: %s", err)
-	//	}
-	//}
+	baselinePaths, _ := cmd.Flags().GetStringSlice("baseline-path")
+	for _, baselinePath := range baselinePaths {
+		if err := detector.AddBaseline(baselinePath); err != nil {
+			errMsg := fmt.Sprintf("Could not load baseline at '%s'. The path must point of a gitleaks report generated using the default format: %s. ", baselinePath, err)
+
+			if !noExitOnFailedBaseline {
+				log.Fatal().Msg(errMsg + "Use --no-exit-on-failed-baseline to continue scanning anyways")
+			}
+
+			log.Error().Msg(errMsg)
+		}
+	}
 
 	// set follow symlinks flag
 	if detector.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks"); err != nil {
