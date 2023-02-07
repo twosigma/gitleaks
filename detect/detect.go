@@ -492,9 +492,11 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 				Raw:      string(b),
 				FilePath: p.Path,
 			}
+
 			if p.Symlink != "" {
 				fragment.SymlinkFile = p.Symlink
 			}
+
 			for _, finding := range d.Detect(fragment) {
 				// need to add 1 since line counting starts at 1
 				finding.EndLine++
@@ -570,7 +572,7 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 
 	for _, rule := range d.Config.Rules {
 		if len(rule.Keywords) == 0 {
-			// if not keywords are associated with the rule always scan the
+			// if no keywords are associated with the rule always scan the
 			// fragment using the rule
 			findings = append(findings, d.detectRule(fragment, rule)...)
 			continue
