@@ -1,0 +1,22 @@
+linters:
+   enable-all: true
+   disable:
+    - gochecknoinits
+    - godot
+    - misspell
+    - golint
+    - scopelint
+    - deadcode
+    - structcheck
+    - nosnakecase
+    - maligned
+    - ifshort
+    - interfacer
+    - varcheck
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - wastedassign
+    - testpackage
+    - exhaustruct
+    - exhaustivestruct
