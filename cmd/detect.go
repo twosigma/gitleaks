@@ -95,6 +95,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	if !noGitMode {
 		// Check the root directory for .gitleaksignore file.
 		ignorePaths = append(ignorePaths, filepath.Join(sourcePaths[0], ".gitleaksignore"))
+		log.Info().Msgf("Trying to ignore following paths: %v", ignorePaths)
 	}
 
 	noExitOnFailedIgnore, _ := cmd.Flags().GetBool("no-exit-on-failed-ignore")
