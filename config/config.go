@@ -173,14 +173,6 @@ func (vc *ViperConfig) Translate() (Config, error) {
 	return c, nil
 }
 
-// Loads default viper config.
-func LoadDefaultViperConfig() {
-	viper.SetConfigFile("toml")
-	if err := viper.ReadConfig(strings.NewReader(DefaultConfig)); err != nil {
-		log.Fatal().Msgf("err reading default config toml %s", err.Error())
-	}
-}
-
 func compileRegexPatterns(patterns []string) []*regexp.Regexp {
 	var compiledRegexes []*regexp.Regexp
 	for _, pattern := range patterns {

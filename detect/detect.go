@@ -610,6 +610,7 @@ func (d *Detector) addFinding(finding report.Finding) {
 		return
 	}
 
+	// TODO: Update to use concurrent slice.
 	d.findingMutex.Lock()
 	d.findings = append(d.findings, finding)
 	if d.Verbose {

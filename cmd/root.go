@@ -49,6 +49,10 @@ func init() {
 	rootCmd.PersistentFlags().Bool("no-banner", false, "suppress banner")
 	rootCmd.PersistentFlags().Bool("no-exit-on-failed-baseline", false, "continue scanning even if Gitleaks fails to parse a baseline file")
 	rootCmd.PersistentFlags().Bool("no-exit-on-failed-ignore", false, "continue scanning even if Gitleaks fails to parse a gitleaks ignore file")
+	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	if err != nil {
+		log.Fatal().Msgf("err binding config %s", err.Error())
+	}
 }
 
 func initLog() {
@@ -75,6 +79,16 @@ func initLog() {
 	}
 }
 
+// Loads default viper config.
+func LoadDefaultViperConfig() {
+	viper.SetConfigFile("toml")
+	if err := viper.ReadConfig(strings.NewReader(config.DefaultConfig)); err != nil {
+		log.Fatal().Msgf("err reading default config toml %s", err.Error())
+	}
+
+	log.Info().Msg(config.DefaultConfig)
+}
+
 func initConfig(sourcePaths []string) {
 	hideBanner, err := rootCmd.Flags().GetBool("no-banner")
 	if err != nil {
@@ -99,7 +113,7 @@ func initConfig(sourcePaths []string) {
 	default:
 		if len(sourcePaths) > 1 {
 			log.Warn().Msg("multiple source files passed without explicitly specifying gitleaks configuration! using default config")
-			config.LoadDefaultViperConfig()
+			LoadDefaultViperConfig()
 			return
 		}
 
@@ -114,13 +128,13 @@ func initConfig(sourcePaths []string) {
 		if !fileInfo.IsDir() {
 			log.Debug().Msgf("unable to load gitleaks config from %s since --source=%s is a file, using default config",
 				sourcePath, source)
-			config.LoadDefaultViperConfig()
+			LoadDefaultViperConfig()
 			return
 		}
 
 		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
 			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", sourcePath)
-			config.LoadDefaultViperConfig()
+			LoadDefaultViperConfig()
 			return
 		}
 
