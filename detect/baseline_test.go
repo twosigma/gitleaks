@@ -132,6 +132,6 @@ func TestIgnoreIssuesInBaseline(t *testing.T) {
 		for _, finding := range test.findings {
 			d.addFinding(finding)
 		}
-		assert.Equal(t, test.expectCount, len(d.findings))
+		assert.Equal(t, test.expectCount, len(d.findings.slice))
 	}
 }

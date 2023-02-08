@@ -4,18 +4,16 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/h2non/filetype"
+	"github.com/zricethezav/gitleaks/v8/config"
+	"github.com/zricethezav/gitleaks/v8/detect/git"
+	"github.com/zricethezav/gitleaks/v8/report"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
-
-	"github.com/h2non/filetype"
-	"github.com/zricethezav/gitleaks/v8/config"
-	"github.com/zricethezav/gitleaks/v8/detect/git"
-	"github.com/zricethezav/gitleaks/v8/report"
 
 	"github.com/fatih/semgroup"
 	"github.com/gitleaks/go-gitdiff/gitdiff"
@@ -59,14 +57,10 @@ type Detector struct {
 	// This is only used for logging purposes and git scans.
 	commitMap map[string]bool
 
-	// findingMutex is to prevent concurrent access to the
-	// findings slice when adding findings.
-	findingMutex *sync.Mutex
-
-	// findings is a slice of report.Findings. This is the result
+	// findings is a thread safe slice of report.Findings. This is the result
 	// of the detector's scan which can then be used to generate a
 	// report.
-	findings []report.Finding
+	findings ThreadSafeSlice[report.Finding]
 
 	// prefilter is a ahocorasick struct used for doing efficient string
 	// matching given a set of words (keywords from the rules in the config)
@@ -115,8 +109,7 @@ func NewDetector(cfg config.Config) *Detector {
 	return &Detector{
 		commitMap:      make(map[string]bool),
 		gitleaksIgnore: make(map[string]bool),
-		findingMutex:   &sync.Mutex{},
-		findings:       make([]report.Finding, 0),
+		findings:       NewThreadSafeSlice([]report.Finding{}),
 		Config:         cfg,
 		prefilter:      builder.Build(cfg.Keywords),
 	}
@@ -326,17 +319,17 @@ func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanT
 	case DetectType:
 		gitdiffFiles, err = git.GitLog(source, logOpts)
 		if err != nil {
-			return d.findings, err
+			return d.findings.slice, err
 		}
 	case ProtectType:
 		gitdiffFiles, err = git.GitDiff(source, false)
 		if err != nil {
-			return d.findings, err
+			return d.findings.slice, err
 		}
 	case ProtectStagedType:
 		gitdiffFiles, err = git.GitDiff(source, true)
 		if err != nil {
-			return d.findings, err
+			return d.findings.slice, err
 		}
 	}
 
@@ -381,14 +374,14 @@ func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanT
 	}
 
 	if err := s.Wait(); err != nil {
-		return d.findings, err
+		return d.findings.slice, err
 	}
 	log.Info().Msgf("%d commits scanned.", len(d.commitMap))
 	log.Debug().Msg("Note: this number might be smaller than expected due to commits with no additions")
 	if git.ErrEncountered {
-		return d.findings, fmt.Errorf("%s", "git error encountered, see logs")
+		return d.findings.slice, fmt.Errorf("%s", "git error encountered, see logs")
 	}
-	return d.findings, nil
+	return d.findings.slice, nil
 }
 
 type scanTarget struct {
@@ -465,7 +458,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	err := sourcePathIterators.Wait()
 	if err != nil {
 		log.Debug().Msgf("Finished with error")
-		return d.findings, err
+		return d.findings.slice, err
 	}
 
 	pathIterators := semgroup.NewGroup(context.Background(), 4)
@@ -474,7 +467,6 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	for _, pa := range paths.slice {
 		p := pa
 		pathIterators.Go(func() error {
-			log.Debug().Msgf("Scanning %v", p.Path)
 			b, err := os.ReadFile(p.Path)
 			if err != nil {
 				return err
@@ -511,10 +503,10 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	}
 
 	if err := pathIterators.Wait(); err != nil {
-		return d.findings, err
+		return d.findings.slice, err
 	}
 
-	return d.findings, nil
+	return d.findings.slice, nil
 }
 
 // DetectReader accepts an io.Reader and a buffer size for the reader in KB
@@ -610,13 +602,11 @@ func (d *Detector) addFinding(finding report.Finding) {
 		return
 	}
 
-	// TODO: Update to use concurrent slice.
-	d.findingMutex.Lock()
-	d.findings = append(d.findings, finding)
+	d.findings.append(finding)
+
 	if d.Verbose {
 		printFinding(finding)
 	}
-	d.findingMutex.Unlock()
 }
 
 // addCommit synchronously adds a commit to the commit slice
