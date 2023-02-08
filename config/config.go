@@ -262,3 +262,11 @@ func LoadSourcePaths(sources []string) []string {
 
 	return sources
 }
+
+// Loads default viper config.
+func LoadDefaultViperConfig() {
+	viper.SetConfigType("toml")
+	if err := viper.ReadConfig(strings.NewReader(DefaultConfig)); err != nil {
+		log.Fatal().Msgf("err reading default config toml %s", err.Error())
+	}
+}

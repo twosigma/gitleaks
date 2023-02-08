@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/zricethezav/gitleaks/v8/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,8 +11,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	"github.com/zricethezav/gitleaks/v8/config"
 )
 
 const banner = `
@@ -79,16 +78,6 @@ func initLog() {
 	}
 }
 
-// Loads default viper config.
-func LoadDefaultViperConfig() {
-	viper.SetConfigFile("toml")
-	if err := viper.ReadConfig(strings.NewReader(config.DefaultConfig)); err != nil {
-		log.Fatal().Msgf("err reading default config toml %s", err.Error())
-	}
-
-	log.Info().Msg(config.DefaultConfig)
-}
-
 func initConfig(sourcePaths []string) {
 	hideBanner, err := rootCmd.Flags().GetBool("no-banner")
 	if err != nil {
@@ -113,7 +102,7 @@ func initConfig(sourcePaths []string) {
 	default:
 		if len(sourcePaths) > 1 {
 			log.Warn().Msg("multiple source files passed without explicitly specifying gitleaks configuration! using default config")
-			LoadDefaultViperConfig()
+			config.LoadDefaultViperConfig()
 			return
 		}
 
@@ -128,13 +117,13 @@ func initConfig(sourcePaths []string) {
 		if !fileInfo.IsDir() {
 			log.Debug().Msgf("unable to load gitleaks config from %s since --source=%s is a file, using default config",
 				sourcePath, source)
-			LoadDefaultViperConfig()
+			config.LoadDefaultViperConfig()
 			return
 		}
 
 		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
 			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", sourcePath)
-			LoadDefaultViperConfig()
+			config.LoadDefaultViperConfig()
 			return
 		}
 
