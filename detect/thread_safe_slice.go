@@ -15,18 +15,25 @@ func NewThreadSafeSlice[K any](slice []K) ThreadSafeSlice[K] {
 }
 
 // Append item to slice
-func (tslice *ThreadSafeSlice[K]) append(item K) {
+func (tslice *ThreadSafeSlice[K]) Append(item K) {
 	tslice.mutex.Lock()
+	defer tslice.mutex.Unlock()
 	tslice.slice = append(tslice.slice, item)
-	tslice.mutex.Unlock()
 }
 
-// Pop item from slice
-func (tslice *ThreadSafeSlice[K]) pop() K {
+// Pop item from slice. True if Pop returned valid element
+func (tslice *ThreadSafeSlice[K]) Pop() (K, bool) {
 	tslice.mutex.Lock()
+	defer tslice.mutex.Unlock()
+
+	if len(tslice.slice) == 0 {
+		// https://stackoverflow.com/questions/70585852/return-default-value-for-generic-type
+		var zeroK K
+		return zeroK, false
+	}
+
 	var item K
 	item, tslice.slice = tslice.slice[0], tslice.slice[1:]
-	tslice.mutex.Unlock()
 
-	return item
+	return item, true
 }

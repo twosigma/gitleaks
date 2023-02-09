@@ -61,20 +61,26 @@ func TestThreadSafeSlice_append(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tslice := NewThreadSafeSlice(tt.fields.slice)
-			tslice.append(tt.args.item)
+			tslice.Append(tt.args.item)
 			assert.Equalf(t, tt.want, tslice.slice, "")
 		})
 	}
 }
 
 func TestThreadSafeSlice_pop(t *testing.T) {
+	type linkedList struct {
+		head int
+		tail *linkedList
+	}
+
 	type fields struct {
-		slice []int
+		slice []linkedList
 	}
 
 	type wants struct {
-		item        int
-		sliceRemain []int
+		item        linkedList
+		success     bool
+		sliceRemain []linkedList
 	}
 
 	tests := []struct {
@@ -83,19 +89,41 @@ func TestThreadSafeSlice_pop(t *testing.T) {
 		want   wants
 	}{
 		{name: "test_pop",
-			fields: fields{slice: []int{5, 4, 3}},
+			fields: fields{slice: []linkedList{
+				{
+					head: 1,
+					tail: nil,
+				},
+				{
+					head: 2,
+					tail: nil,
+				},
+			},
+			},
 			want: wants{
-				item:        5,
-				sliceRemain: []int{4, 3},
-			}},
+				item:        linkedList{head: 1, tail: nil},
+				success:     true,
+				sliceRemain: []linkedList{{head: 2, tail: nil}},
+			},
+		},
+		{name: "test_pop_empty",
+			fields: fields{slice: []linkedList{}},
+			want: wants{
+				item:        linkedList{},
+				success:     false,
+				sliceRemain: []linkedList{},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tslice := NewThreadSafeSlice(tt.fields.slice)
+			item, success := tslice.Pop()
 			assert.Equalf(t, tt.want, wants{
-				item:        tslice.pop(),
+				item:        item,
+				success:     success,
 				sliceRemain: tslice.slice,
-			}, "pop()")
+			}, "Pop()")
 		})
 	}
 }

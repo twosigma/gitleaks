@@ -442,7 +442,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 						}
 
 						// Otherwise, scan the file
-						paths.append(
+						paths.Append(
 							scanTarget{
 								Path:    path,
 								Symlink: "",
@@ -460,7 +460,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 							return nil
 						}
 
-						paths.append(scanTarget{
+						paths.Append(scanTarget{
 							Path:    realPath,
 							Symlink: path,
 						})
@@ -618,7 +618,7 @@ func (d *Detector) addFinding(finding report.Finding) {
 		return
 	}
 
-	d.findings.append(finding)
+	d.findings.Append(finding)
 
 	if d.Verbose {
 		printFinding(finding)
