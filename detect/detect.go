@@ -80,7 +80,7 @@ type Detector struct {
 	gitleaksIgnoreWriteMutex sync.Mutex
 
 	// Maximum number of GoRoutines allowed to scan concurrently
-	MaxWorkers uint
+	MaxWorkers int
 }
 
 // Fragment contains the data to be scanned
@@ -436,6 +436,24 @@ func (d *Detector) scanFilePath(target scanTarget) error {
 	return nil
 }
 
+func scanFilePathPollLoop(d *Detector, paths *ThreadSafeSlice[scanTarget], pathIterators *semgroup.Group) error {
+	for path, exists := paths.Pop(); exists; path, exists = paths.Pop() {
+		//log.Info().Msgf("Pulled: %v from tss %p. Mutex address: %p. Detector: %p", path.Path, paths, &paths.mutex, d)
+
+		if err := d.scanFilePath(path); err != nil {
+			//Launch a worker to replace this one.
+			pathIterators.Go(func() error {
+				return scanFilePathPollLoop(d, paths, pathIterators)
+			})
+
+			//Return err
+			return err
+		}
+	}
+
+	return nil
+}
+
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
@@ -515,12 +533,20 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 
 	// Scan each file concurrently.
 	pathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
-	for _, pa := range paths.slice {
-		p := pa
+
+	numWorkers := min(d.MaxWorkers, len(paths.slice))
+	for i := 0; i < numWorkers; i++ {
 		pathIterators.Go(func() error {
-			return d.scanFilePath(p)
+			return scanFilePathPollLoop(d, &paths, pathIterators)
 		})
 	}
+
+	//for _, pa := range paths.slice {
+	//	p := pa
+	//	pathIterators.Go(func() error {
+	//		return d.scanFilePath(p)
+	//	})
+	//}
 
 	if err := pathIterators.Wait(); err != nil {
 		return d.findings.slice, err

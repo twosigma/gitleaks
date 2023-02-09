@@ -1,6 +1,8 @@
 package detect
 
-import "sync"
+import (
+	"sync"
+)
 
 type ThreadSafeSlice[C any] struct {
 	mutex sync.Mutex
@@ -28,12 +30,13 @@ func (tslice *ThreadSafeSlice[K]) Pop() (K, bool) {
 
 	if len(tslice.slice) == 0 {
 		// https://stackoverflow.com/questions/70585852/return-default-value-for-generic-type
+
 		var zeroK K
 		return zeroK, false
 	}
 
 	var item K
 	item, tslice.slice = tslice.slice[0], tslice.slice[1:]
-
+	
 	return item, true
 }

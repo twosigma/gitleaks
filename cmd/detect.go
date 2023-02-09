@@ -81,11 +81,11 @@ func runDetect(cmd *cobra.Command, args []string) {
 	// Set Max Workers. Preference Cobra > Viper > Cobra Default
 	switch {
 	case cmd.Flags().Changed("max-workers"):
-		detector.MaxWorkers, err = cmd.Flags().GetUint("max-workers")
+		detector.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
 	case vc.MaxWorkers != 0:
 		detector.MaxWorkers = vc.MaxWorkers
 	default:
-		detector.MaxWorkers, err = cmd.Flags().GetUint("max-workers")
+		detector.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
 		log.Info().Msgf("Using default number of workers: %v.", detector.MaxWorkers)
 	}
 
