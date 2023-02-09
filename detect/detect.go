@@ -437,18 +437,18 @@ func (d *Detector) scanFilePath(target scanTarget) error {
 }
 
 func scanFilePathPollLoop(d *Detector, paths *ThreadSafeSlice[scanTarget], pathIterators *semgroup.Group) error {
+	errors := []error{}
+
 	for path, exists := paths.Pop(); exists; path, exists = paths.Pop() {
 		//log.Info().Msgf("Pulled: %v from tss %p. Mutex address: %p. Detector: %p", path.Path, paths, &paths.mutex, d)
 
 		if err := d.scanFilePath(path); err != nil {
-			//Launch a worker to replace this one.
-			pathIterators.Go(func() error {
-				return scanFilePathPollLoop(d, paths, pathIterators)
-			})
-
-			//Return err
-			return err
+			errors = append(errors, err)
 		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf(fmt.Sprintf("errors: %v", errors))
 	}
 
 	return nil
