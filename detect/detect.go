@@ -205,9 +205,9 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 	}
 
 	// If flag configure and raw data size bigger then the flag
-	if d.MaxTargetMegaBytes > 0 {
+	if d.Config.MaxTargetMegaBytes > 0 {
 		rawLength := len(fragment.Raw) / 1000000
-		if rawLength > d.MaxTargetMegaBytes {
+		if rawLength > d.Config.MaxTargetMegaBytes {
 			log.Debug().Msgf("skipping file: %s scan due to size: %d", fragment.FilePath, rawLength)
 			return findings
 		}
@@ -325,7 +325,7 @@ func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanT
 		}
 	}
 
-	s := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
+	s := semgroup.NewGroup(context.Background(), int64(d.Config.MaxWorkers))
 
 	for gitdiffFile := range gitdiffFiles {
 		gitdiffFile := gitdiffFile
@@ -420,7 +420,7 @@ func (d *Detector) scanFilePath(target scanTarget) error {
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
-	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
+	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.Config.MaxWorkers))
 	paths := NewThreadSafeSlice(make([]scanTarget, 0))
 
 	// Walk over each source path
@@ -459,7 +459,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 								Symlink: "",
 							})
 					}
-					if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
+					if fInfo.Mode().Type() == fs.ModeSymlink && d.Config.FollowSymlinks {
 						realPath, err := filepath.EvalSymlinks(path)
 						if err != nil {
 							return err
@@ -489,7 +489,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	}
 
 	// Scan each file concurrently.
-	pathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
+	pathIterators := semgroup.NewGroup(context.Background(), int64(d.Config.MaxWorkers))
 
 	for _, pa := range paths.slice {
 		p := pa
@@ -526,7 +526,7 @@ func (d *Detector) DetectReader(r io.Reader, bufSize int) ([]report.Finding, err
 		}
 		for _, finding := range d.Detect(fragment) {
 			findings = append(findings, finding)
-			if d.Verbose {
+			if d.Config.Verbose {
 				printFinding(finding)
 			}
 		}
@@ -544,7 +544,7 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 
 	// check if filepath is allowed
 	if fragment.FilePath != "" && (d.Config.Allowlist.PathAllowed(fragment.FilePath) ||
-		fragment.FilePath == d.Config.Path || (d.baselinePath != "" && fragment.FilePath == d.baselinePath)) {
+		fragment.FilePath == d.Config.Path || (d.Config.BaselinePath != "" && fragment.FilePath == d.Config.BaselinePath)) {
 		return findings
 	}
 
@@ -576,7 +576,7 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 			findings = append(findings, d.detectRule(fragment, rule)...)
 		}
 	}
-	return filter(findings, d.Redact)
+	return filter(findings, d.Config.Redact)
 }
 
 // addFinding synchronously adds a finding to the findings slice
@@ -600,7 +600,7 @@ func (d *Detector) addFinding(finding report.Finding) {
 
 	d.findings.Append(finding)
 
-	if d.Verbose {
+	if d.Config.Verbose {
 		printFinding(finding)
 	}
 }
