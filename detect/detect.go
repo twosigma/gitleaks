@@ -40,20 +40,6 @@ type Detector struct {
 	// Config is the configuration for the detector
 	Config config.Config
 
-	// Redact is a flag to redact findings. This is exported
-	// so users using gitleaks as a library can set this flag
-	// without calling `detector.Start(cmd *cobra.Command)`
-	Redact bool
-
-	// verbose is a flag to print findings
-	Verbose bool
-
-	// files larger than this will be skipped
-	MaxTargetMegaBytes int
-
-	// followSymlinks is a flag to enable scanning symlink files
-	FollowSymlinks bool
-
 	// commitMap is used to keep track of commits that have been scanned.
 	// This is only used for logging purposes and git scans.
 	commitMap map[string]bool
@@ -70,17 +56,11 @@ type Detector struct {
 	// a list of known findings that should be ignored
 	baseline []report.Finding
 
-	// path to baseline
-	baselinePath string
-
 	// gitleaksIgnore
 	gitleaksIgnore map[string]bool
 
 	// Mutex for concurrent map writes
 	gitleaksIgnoreWriteMutex sync.Mutex
-
-	// Maximum number of GoRoutines allowed to scan concurrently
-	MaxWorkers int
 }
 
 // Fragment contains the data to be scanned
@@ -170,7 +150,8 @@ func (d *Detector) AddBaseline(baselinePath string) error {
 		}
 		d.baseline = baseline
 	}
-	d.baselinePath = baselinePath
+
+	d.Config.BaselinePath = baselinePath
 	return nil
 }
 
@@ -436,35 +417,11 @@ func (d *Detector) scanFilePath(target scanTarget) error {
 	return nil
 }
 
-func scanFilePathPollLoop(d *Detector, paths *ThreadSafeSlice[scanTarget], pathIterators *semgroup.Group) error {
-	errors := []error{}
-
-	for path, exists := paths.Pop(); exists; path, exists = paths.Pop() {
-		//log.Info().Msgf("Pulled: %v from tss %p. Mutex address: %p. Detector: %p", path.Path, paths, &paths.mutex, d)
-
-		if err := d.scanFilePath(path); err != nil {
-			errors = append(errors, err)
-		}
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf(fmt.Sprintf("errors: %v", errors))
-	}
-
-	return nil
-}
-
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
-	// TODO: Use a non-constant number of workers.
 	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 	paths := NewThreadSafeSlice(make([]scanTarget, 0))
-
-	// Algorithm:
-	// Walk over all the paths, add them to some sort of queue.
-	// Each worker pops items off the queue
-	// When a worker finds that the list is empty, it returns.
 
 	// Walk over each source path
 	for _, source := range sources {
@@ -534,19 +491,12 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	// Scan each file concurrently.
 	pathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 
-	numWorkers := min(d.MaxWorkers, len(paths.slice))
-	for i := 0; i < numWorkers; i++ {
+	for _, pa := range paths.slice {
+		p := pa
 		pathIterators.Go(func() error {
-			return scanFilePathPollLoop(d, &paths, pathIterators)
+			return d.scanFilePath(p)
 		})
 	}
-
-	//for _, pa := range paths.slice {
-	//	p := pa
-	//	pathIterators.Go(func() error {
-	//		return d.scanFilePath(p)
-	//	})
-	//}
 
 	if err := pathIterators.Wait(); err != nil {
 		return d.findings.slice, err

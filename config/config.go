@@ -65,6 +65,24 @@ type Config struct {
 
 	// used to keep sarif results consistent
 	orderedRules []string
+
+	// Redact is a flag to redact findings.
+	Redact bool
+
+	// verbose is a flag to print findings
+	Verbose bool
+
+	// files larger than this will be skipped
+	MaxTargetMegaBytes int
+
+	// followSymlinks is a flag to enable scanning symlink files
+	FollowSymlinks bool
+
+	// path to baseline
+	BaselinePath string
+
+	// Maximum number of GoRoutines allowed to scan concurrently
+	MaxWorkers int
 }
 
 // Extend is a struct that allows users to define how they want their
