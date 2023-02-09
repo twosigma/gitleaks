@@ -344,7 +344,7 @@ func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanT
 		}
 	}
 
-	s := semgroup.NewGroup(context.Background(), 4)
+	s := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 
 	for gitdiffFile := range gitdiffFiles {
 		gitdiffFile := gitdiffFile
@@ -403,7 +403,6 @@ type scanTarget struct {
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
-	log.Info().Msgf("here")
 	// TODO: Use a non-constant number of workers.
 	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 	paths := NewThreadSafeSlice(make([]scanTarget, 0))

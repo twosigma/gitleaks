@@ -38,7 +38,7 @@ func init() {
 	cobra.OnInitialize(initLog)
 	rootCmd.PersistentFlags().StringP("config", "c", "", configDescription)
 	rootCmd.PersistentFlags().Int("exit-code", 1, "exit code when leaks have been encountered")
-	rootCmd.PersistentFlags().UintP("max-workers", "j", 64, "maximum number of worker threads scanning files concurrently. Default value of 64")
+	rootCmd.PersistentFlags().UintP("max-workers", "j", 16, "maximum number of worker threads scanning files concurrently. Default value of 16")
 	rootCmd.PersistentFlags().StringP("report-path", "r", "", "report file")
 	rootCmd.PersistentFlags().StringP("report-format", "f", "json", "output format (json, csv, sarif)")
 	rootCmd.PersistentFlags().StringSliceP("baseline-path", "b", []string{}, "path(s) to baseline file with issues that can be ignored")
