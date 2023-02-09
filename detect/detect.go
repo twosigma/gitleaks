@@ -407,6 +407,11 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 	paths := NewThreadSafeSlice(make([]scanTarget, 0))
 
+	// Algorithm:
+	// Walk over all the paths, add them to some sort of queue.
+	// Each worker pops items off the queue
+	// When a worker finds that the list is empty, it returns.
+
 	// Walk over each source path
 	for _, source := range sources {
 		sourcePathIterators.Go(func() error {
