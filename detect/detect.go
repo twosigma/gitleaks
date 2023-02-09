@@ -400,6 +400,42 @@ type scanTarget struct {
 	Symlink string
 }
 
+// Scan a specific scanTarget
+func (d *Detector) scanFilePath(target scanTarget) error {
+	b, err := os.ReadFile(target.Path)
+	if err != nil {
+		return err
+	}
+
+	mimetype, err := filetype.Match(b)
+	if err != nil {
+		return err
+	}
+	if mimetype.MIME.Type == "application" {
+		return nil // skip binary files
+	}
+
+	fragment := Fragment{
+		Raw:      string(b),
+		FilePath: target.Path,
+	}
+
+	if target.Symlink != "" {
+		fragment.SymlinkFile = target.Symlink
+	}
+
+	for _, finding := range d.Detect(fragment) {
+		// need to add 1 since line counting starts at 1
+		finding.EndLine++
+		finding.StartLine++
+
+		log.Debug().Msgf("Finding found in %v", target.Path)
+		d.addFinding(finding)
+	}
+
+	return nil
+}
+
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
@@ -477,44 +513,12 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 		return d.findings.slice, err
 	}
 
+	// Scan each file concurrently.
 	pathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
-
-	// Scan each file concurrently
 	for _, pa := range paths.slice {
 		p := pa
 		pathIterators.Go(func() error {
-			b, err := os.ReadFile(p.Path)
-			if err != nil {
-				return err
-			}
-
-			mimetype, err := filetype.Match(b)
-			if err != nil {
-				return err
-			}
-			if mimetype.MIME.Type == "application" {
-				return nil // skip binary files
-			}
-
-			fragment := Fragment{
-				Raw:      string(b),
-				FilePath: p.Path,
-			}
-
-			if p.Symlink != "" {
-				fragment.SymlinkFile = p.Symlink
-			}
-
-			for _, finding := range d.Detect(fragment) {
-				// need to add 1 since line counting starts at 1
-				finding.EndLine++
-				finding.StartLine++
-
-				log.Debug().Msgf("Finding found in %v", p.Path)
-				d.addFinding(finding)
-			}
-
-			return nil
+			return d.scanFilePath(p)
 		})
 	}
 
