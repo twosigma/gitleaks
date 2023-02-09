@@ -26,6 +26,7 @@ const gitleaksAllowSignature = "gitleaks:allow"
 type ViperConfig struct {
 	Description string
 	Extend      Extend
+	MaxWorkers  uint
 	Rules       []struct {
 		ID          string
 		Description string

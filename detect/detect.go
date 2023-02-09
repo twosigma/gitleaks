@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/fatih/semgroup"
 	"github.com/gitleaks/go-gitdiff/gitdiff"
@@ -74,6 +75,12 @@ type Detector struct {
 
 	// gitleaksIgnore
 	gitleaksIgnore map[string]bool
+
+	// Mutex for concurrent map writes
+	gitleaksIgnoreWriteMutex sync.Mutex
+
+	// Maximum number of GoRoutines allowed to scan concurrently
+	MaxWorkers uint
 }
 
 // Fragment contains the data to be scanned
@@ -107,11 +114,12 @@ func NewDetector(cfg config.Config) *Detector {
 	})
 
 	return &Detector{
-		commitMap:      make(map[string]bool),
-		gitleaksIgnore: make(map[string]bool),
-		findings:       NewThreadSafeSlice([]report.Finding{}),
-		Config:         cfg,
-		prefilter:      builder.Build(cfg.Keywords),
+		commitMap:                make(map[string]bool),
+		gitleaksIgnore:           make(map[string]bool),
+		gitleaksIgnoreWriteMutex: sync.Mutex{},
+		findings:                 NewThreadSafeSlice([]report.Finding{}),
+		Config:                   cfg,
+		prefilter:                builder.Build(cfg.Keywords),
 	}
 }
 
@@ -145,9 +153,12 @@ func (d *Detector) AddGitleaksIgnore(gitleaksIgnorePath string) error {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 
+	d.gitleaksIgnoreWriteMutex.Lock()
 	for scanner.Scan() {
 		d.gitleaksIgnore[scanner.Text()] = true
 	}
+	d.gitleaksIgnoreWriteMutex.Unlock()
+
 	return nil
 }
 
@@ -392,8 +403,9 @@ type scanTarget struct {
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
 func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
+	log.Info().Msgf("here")
 	// TODO: Use a non-constant number of workers.
-	sourcePathIterators := semgroup.NewGroup(context.Background(), 4)
+	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 	paths := NewThreadSafeSlice(make([]scanTarget, 0))
 
 	// Walk over each source path
@@ -461,7 +473,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 		return d.findings.slice, err
 	}
 
-	pathIterators := semgroup.NewGroup(context.Background(), 4)
+	pathIterators := semgroup.NewGroup(context.Background(), int64(d.MaxWorkers))
 
 	// Scan each file concurrently
 	for _, pa := range paths.slice {

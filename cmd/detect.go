@@ -73,8 +73,27 @@ func runDetect(cmd *cobra.Command, args []string) {
 
 	// set max target megabytes flag
 	if detector.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
+		// TODO: Why is there no message here?
 		log.Fatal().Err(err).Msg("")
 	}
+
+	// TODO: Make a set and validate method for each flag. input is viper config + cmd + detector.
+	// Set Max Workers. Preference Cobra > Viper > Cobra Default
+	switch {
+	case cmd.Flags().Changed("max-workers"):
+		detector.MaxWorkers, err = cmd.Flags().GetUint("max-workers")
+	case vc.MaxWorkers != 0:
+		detector.MaxWorkers = vc.MaxWorkers
+	default:
+		detector.MaxWorkers, err = cmd.Flags().GetUint("max-workers")
+		log.Info().Msgf("Using default number of workers: %v.", detector.MaxWorkers)
+	}
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to set maximum workers.")
+	}
+
+	// TODO: Add warning about unbounded max memory size.
 
 	// determine what type of scan:
 	// - git: scan the history of the repo
