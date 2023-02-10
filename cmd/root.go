@@ -48,12 +48,12 @@ func init() {
 	rootCmd.PersistentFlags().Bool("no-exit-on-failed-ignore", false, "continue scanning even if Gitleaks fails to parse a gitleaks ignore file")
 
 	// Passed to Detector API
-	rootCmd.PersistentFlags().IntP("max-workers", "j", 16, "maximum number of worker threads scanning files concurrently. Default value of 16")
 	rootCmd.PersistentFlags().StringSliceP("baseline-path", "b", []string{}, "path(s) to baseline file with issues that can be ignored")
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
-	rootCmd.PersistentFlags().Int("max-target-megabytes", 0, "files larger than this will be skipped")
-	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
 	rootCmd.PersistentFlags().String("log-opts", "", "git log options")
+	rootCmd.PersistentFlags().Int("max-target-megabytes", 0, "files larger than this will be skipped")
+	rootCmd.PersistentFlags().IntP("max-workers", "j", 16, "maximum number of worker threads scanning files concurrently. Default value of 16")
+	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
 
 	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 	if err != nil {

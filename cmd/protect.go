@@ -19,7 +19,6 @@ func init() {
 
 	// Don't pass to detect API
 	protectCmd.Flags().Bool("staged", false, "detect secrets in a --staged state")
-
 	rootCmd.AddCommand(protectCmd)
 }
 

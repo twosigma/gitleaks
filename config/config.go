@@ -71,7 +71,7 @@ type ViperConfig struct {
 	// NONE
 }
 
-// Config is a configuration struct that contains rules and an allowlist if present.
+// Config contains parameters determining how the DetectAPI behaves across all modes
 type Config struct {
 	Extend      Extend
 	Path        string
@@ -80,26 +80,39 @@ type Config struct {
 	Allowlist   Allowlist
 	Keywords    []string
 
-	// used to keep sarif results consistent
+	// Used to keep sarif results consistent
 	orderedRules []string
+
+	// Path to baseline files
+	BaselinePath []string
+
+	// Git log options
+	GitLogOpts string
+
+	// Files larger than this will be skipped
+	MaxTargetMegaBytes int
+
+	// Maximum number of GoRoutines allowed to scan concurrently
+	MaxWorkers int
 
 	// Redact is a flag to redact findings.
 	Redact bool
 
 	// verbose is a flag to print findings
 	Verbose bool
+}
 
-	// files larger than this will be skipped
-	MaxTargetMegaBytes int
-
-	// followSymlinks is a flag to enable scanning symlink files
+// DetectConfig contains parameters determining how DetectAPI behaves in DetectType mode
+type DetectConfig struct {
+	// FollowSymlinks is a flag that enables scanning of symlink files
 	FollowSymlinks bool
 
-	// path to baseline
-	BaselinePath string
+	// Paths to gitleaks ignore files.
+	GitleaksIgnore []string
+}
 
-	// Maximum number of GoRoutines allowed to scan concurrently
-	MaxWorkers int
+// ProtectConfig contains parameters determining how DetectAPI behaves in ProtectType/ProtectTypeStaged mode
+type ProtectConfig struct {
 }
 
 // Extend is a struct that allows users to define how they want their
