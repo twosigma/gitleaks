@@ -94,6 +94,7 @@ func initLog() {
 	}
 }
 
+// initConfig is responsible for identifying the location of the Viper configuration.
 func initConfig(sourcePaths []string) {
 
 	cfgPath, err := rootCmd.Flags().GetString("config")

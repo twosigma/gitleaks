@@ -98,8 +98,14 @@ type Config struct {
 	// Redact is a flag to redact findings.
 	Redact bool
 
-	// verbose is a flag to print findings
+	// Verbose is a flag to print findings
 	Verbose bool
+
+	// Detect mode specific configuration
+	DetectConfig *DetectConfig
+
+	// Protect mode specific configuration
+	ProtectConfig *DetectConfig
 }
 
 // DetectConfig contains parameters determining how DetectAPI behaves in DetectType mode
