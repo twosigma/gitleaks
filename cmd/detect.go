@@ -17,11 +17,16 @@ import (
 
 func init() {
 	rootCmd.AddCommand(detectCmd)
+
+	// Pass to Detect API
 	detectCmd.Flags().String("log-opts", "", "git log options")
-	detectCmd.Flags().Bool("no-git", false, "treat git repo as a regular directory and scan those files, --log-opts has no effect on the scan when --no-git is set")
-	detectCmd.Flags().Bool("pipe", false, "scan input from stdin, ex: `cat some_file | gitleaks detect --pipe`")
+
 	detectCmd.Flags().Bool("follow-symlinks", false, "scan files that are symlinks to other files")
 	detectCmd.Flags().StringSlice("gitleaks-ignore", []string{}, "Pass paths to gitleaks ignore files explicitly.")
+
+	// Do not pass to detect api
+	detectCmd.Flags().Bool("no-git", false, "treat git repo as a regular directory and scan those files, --log-opts has no effect on the scan when --no-git is set")
+	detectCmd.Flags().Bool("pipe", false, "scan input from stdin, ex: `cat some_file | gitleaks detect --pipe`")
 }
 
 var detectCmd = &cobra.Command{
