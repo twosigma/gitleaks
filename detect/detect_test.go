@@ -371,8 +371,8 @@ func TestDetect(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, err := vc.Translate()
-		cfg.Path = filepath.Join(configPath, tt.cfgName+".toml")
+		cfg, err := vc.Translate(config.DetectType)
+		cfg.Path.Add(filepath.Join(configPath, tt.cfgName+".toml"))
 		if tt.wantError != nil {
 			if err == nil {
 				t.Errorf("expected error")
@@ -494,12 +494,12 @@ func TestFromGit(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, err := vc.Translate()
+		cfg, err := vc.Translate(config.DetectType)
 		if err != nil {
 			t.Error(err)
 		}
 		detector := NewDetector(cfg)
-		findings, err := detector.DetectGit(tt.source, tt.logOpts, DetectType)
+		findings, err := detector.DetectGit(tt.source, config.DetectType)
 		if err != nil {
 			t.Error(err)
 		}
@@ -577,9 +577,9 @@ func TestFromFiles(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, _ := vc.Translate()
+		cfg, _ := vc.Translate(config.DetectType)
+		cfg.DetectConfig.FollowSymlinks = true
 		detector := NewDetector(cfg)
-		detector.FollowSymlinks = true
 		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
@@ -633,9 +633,9 @@ func TestDetectWithSymlinks(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, _ := vc.Translate()
+		cfg, _ := vc.Translate(config.DetectType)
+		cfg.DetectConfig.FollowSymlinks = true
 		detector := NewDetector(cfg)
-		detector.FollowSymlinks = true
 		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
