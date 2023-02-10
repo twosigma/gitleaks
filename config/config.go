@@ -20,6 +20,18 @@ var extendDepth int
 const maxExtendDepth = 2
 const gitleaksAllowSignature = "gitleaks:allow"
 
+// GitScanType is used to differentiate between git scan types:
+// $ gitleaks detect
+// $ gitleaks protect
+// $ gitleaks protect staged
+type GitScanType int
+
+const (
+	DetectType GitScanType = iota
+	ProtectType
+	ProtectStagedType
+)
+
 // ViperConfig is the config struct used by the Viper config package
 // to parse the config file. This struct does not include regular expressions.
 // It is used as an intermediary to convert the Viper config to the Config struct.
@@ -61,7 +73,7 @@ type ViperConfig struct {
 	Verbose            bool
 	MaxTargetMegabytes int
 	Redact             bool
-	LogOpts            string
+	GitLogOpts         string
 
 	// Detect command line fields
 	FollowSymlinks bool
@@ -105,7 +117,7 @@ type Config struct {
 	DetectConfig *DetectConfig
 
 	// Protect mode specific configuration
-	ProtectConfig *DetectConfig
+	ProtectConfig *ProtectConfig
 }
 
 // DetectConfig contains parameters determining how DetectAPI behaves in DetectType mode
@@ -129,7 +141,7 @@ type Extend struct {
 	UseDefault bool
 }
 
-func (vc *ViperConfig) Translate() (Config, error) {
+func (vc *ViperConfig) Translate(scanType GitScanType) (Config, error) {
 	var (
 		keywords     []string
 		orderedRules []string
@@ -210,6 +222,24 @@ func (vc *ViperConfig) Translate() (Config, error) {
 		},
 		Keywords:     keywords,
 		orderedRules: orderedRules,
+
+		MaxWorkers:         vc.MaxWorkers,
+		BaselinePath:       vc.BaselinePath,
+		Verbose:            vc.Verbose,
+		MaxTargetMegaBytes: vc.MaxTargetMegabytes,
+		Redact:             vc.Redact,
+		GitLogOpts:         vc.GitLogOpts,
+	}
+
+	if scanType == DetectType {
+		c.DetectConfig = &DetectConfig{
+			FollowSymlinks: vc.FollowSymlinks,
+			GitleaksIgnore: vc.GitleaksIgnore,
+		}
+	}
+
+	if scanType == ProtectType || scanType == ProtectStagedType {
+		c.ProtectConfig = &ProtectConfig{}
 	}
 
 	if maxExtendDepth != extendDepth {
@@ -218,9 +248,9 @@ func (vc *ViperConfig) Translate() (Config, error) {
 			log.Fatal().Msg("unable to load config due to extend.path and extend.useDefault being set")
 		}
 		if c.Extend.UseDefault {
-			c.extendDefault()
+			c.extendDefault(scanType)
 		} else if c.Extend.Path != "" {
-			c.extendPath()
+			c.extendPath(scanType)
 		}
 
 	}
@@ -247,7 +277,7 @@ func (c *Config) OrderedRules() []Rule {
 	return orderedRules
 }
 
-func (c *Config) extendDefault() {
+func (c *Config) extendDefault(scanType GitScanType) {
 	extendDepth++
 	viper.SetConfigType("toml")
 	if err := viper.ReadConfig(strings.NewReader(DefaultConfig)); err != nil {
@@ -259,7 +289,7 @@ func (c *Config) extendDefault() {
 		log.Fatal().Msgf("failed to load extended config, err: %s", err)
 		return
 	}
-	cfg, err := defaultViperConfig.Translate()
+	cfg, err := defaultViperConfig.Translate(scanType)
 	if err != nil {
 		log.Fatal().Msgf("failed to load extended config, err: %s", err)
 		return
@@ -269,7 +299,7 @@ func (c *Config) extendDefault() {
 
 }
 
-func (c *Config) extendPath() {
+func (c *Config) extendPath(scanType GitScanType) {
 	extendDepth++
 	viper.SetConfigFile(c.Extend.Path)
 	if err := viper.ReadInConfig(); err != nil {
@@ -281,7 +311,7 @@ func (c *Config) extendPath() {
 		log.Fatal().Msgf("failed to load extended config, err: %s", err)
 		return
 	}
-	cfg, err := extensionViperConfig.Translate()
+	cfg, err := extensionViperConfig.Translate(scanType)
 	if err != nil {
 		log.Fatal().Msgf("failed to load extended config, err: %s", err)
 		return

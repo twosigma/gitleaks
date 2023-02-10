@@ -23,18 +23,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Type used to differentiate between git scan types:
-// $ gitleaks detect
-// $ gitleaks protect
-// $ gitleaks protect staged
-type GitScanType int
-
-const (
-	DetectType GitScanType = iota
-	ProtectType
-	ProtectStagedType
-)
-
 // Detector is the main detector struct
 type Detector struct {
 	// Config is the configuration for the detector
@@ -151,7 +139,7 @@ func (d *Detector) AddBaseline(baselinePath string) error {
 		d.baseline = baseline
 	}
 
-	d.Config.BaselinePath = baselinePath
+	d.Config.BaselinePath = append(d.Config.BaselinePath, baselinePath)
 	return nil
 }
 
@@ -302,23 +290,23 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 // GitScan accepts a *gitdiff.File channel which contents a git history generated from
 // the output of `git log -p ...`. startGitScan will look at each file (patch) in the history
 // and determine if the patch contains any findings.
-func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanType) ([]report.Finding, error) {
+func (d *Detector) DetectGit(source string, logOpts string, gitScanType config.GitScanType) ([]report.Finding, error) {
 	var (
 		gitdiffFiles <-chan *gitdiff.File
 		err          error
 	)
 	switch gitScanType {
-	case DetectType:
+	case config.DetectType:
 		gitdiffFiles, err = git.GitLog(source, logOpts)
 		if err != nil {
 			return d.findings.slice, err
 		}
-	case ProtectType:
+	case config.ProtectType:
 		gitdiffFiles, err = git.GitDiff(source, false)
 		if err != nil {
 			return d.findings.slice, err
 		}
-	case ProtectStagedType:
+	case config.ProtectStagedType:
 		gitdiffFiles, err = git.GitDiff(source, true)
 		if err != nil {
 			return d.findings.slice, err
@@ -459,7 +447,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 								Symlink: "",
 							})
 					}
-					if fInfo.Mode().Type() == fs.ModeSymlink && d.Config.FollowSymlinks {
+					if fInfo.Mode().Type() == fs.ModeSymlink && d.Config.DetectConfig.FollowSymlinks {
 						realPath, err := filepath.EvalSymlinks(path)
 						if err != nil {
 							return err
