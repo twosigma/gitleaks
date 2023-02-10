@@ -2,7 +2,6 @@ package detect
 
 import (
 	"github.com/stretchr/testify/assert"
-	"sync"
 	"testing"
 )
 
@@ -13,26 +12,21 @@ func TestNewThreadSafeSlice(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want ThreadSafeSlice[int]
+		want []int
 	}{
 		{name: "create_empty",
 			args: args{slice: []int{}},
-			want: ThreadSafeSlice[int]{
-				mutex: sync.Mutex{},
-				slice: []int{},
-			},
+			want: []int{},
 		},
 		{name: "create_from_slice",
 			args: args{slice: []int{1, 2, 3, 4}},
-			want: ThreadSafeSlice[int]{
-				mutex: sync.Mutex{},
-				slice: []int{1, 2, 3, 4},
-			},
+			want: []int{1, 2, 3, 4},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, NewThreadSafeSlice(tt.args.slice), "NewThreadSafeSlice(%v)", tt.args.slice)
+			tts := NewThreadSafeSlice(tt.args.slice)
+			assert.Equalf(t, tt.want, tts.slice, "NewThreadSafeSlice(%v)", tt.args.slice)
 		})
 	}
 }

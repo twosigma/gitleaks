@@ -135,7 +135,7 @@ func TestTranslate(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, err := vc.Translate()
+		cfg, err := vc.Translate(DetectType)
 		if tt.wantError != nil {
 			if err == nil {
 				t.Errorf("expected error")

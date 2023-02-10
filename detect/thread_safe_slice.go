@@ -37,6 +37,6 @@ func (tslice *ThreadSafeSlice[K]) Pop() (K, bool) {
 
 	var item K
 	item, tslice.slice = tslice.slice[0], tslice.slice[1:]
-	
+
 	return item, true
 }
