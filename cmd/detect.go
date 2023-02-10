@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -34,19 +33,15 @@ var detectCmd = &cobra.Command{
 func runDetect(cmd *cobra.Command, args []string) {
 	// TODO: Validate this works when pipe occurs.
 	sourcePaths := config.LoadSourcePaths(args)
-	initConfig(sourcePaths)
+	parentConfig := initConfig(sourcePaths)
 	var (
-		vc             config.ViperConfig
-		findings       []report.Finding
-		err            error
-		decodeMetadata mapstructure.Metadata
+		vc       config.ViperConfig
+		findings []report.Finding
+		err      error
 	)
 
-	err = viper.Unmarshal(&vc, func(decoderConfig *mapstructure.DecoderConfig) {
-		decoderConfig.Metadata = &decodeMetadata
-	})
-
-	// Load config
+	// Load viper config
+	err = viper.Unmarshal(&vc)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
@@ -54,19 +49,15 @@ func runDetect(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
-
+	cfg.Path.Add(parentConfig)
 	unmarshallCobraFlagsRoot(&cfg, cmd)
 	unmarshallCobraFlagsDetect(&cfg, cmd)
-
-	// TODO: Make Path a list of paths.
-	cfg.Path, _ = cmd.Flags().GetString("config")
 
 	// start timer
 	start := time.Now()
 
 	// Setup detector
 	detector := detect.NewDetector(cfg)
-	detector.Config.Path, err = cmd.Flags().GetString("config")
 	if err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
@@ -108,12 +99,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 			log.Fatal().Err(err).Msg("")
 		}
 	default: // Default to scanning as git repository.
-		var logOpts string
-		logOpts, err = cmd.Flags().GetString("log-opts")
-		if err != nil {
-			log.Fatal().Err(err).Msg("")
-		}
-		findings, err = detector.DetectGit(sourcePaths[0], logOpts, config.DetectType)
+		findings, err = detector.DetectGit(sourcePaths[0], config.DetectType)
 		if err != nil {
 			// don't exit on error, just log it
 			log.Error().Err(err).Msg("")

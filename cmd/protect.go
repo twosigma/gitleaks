@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -30,7 +29,7 @@ var protectCmd = &cobra.Command{
 
 func runProtect(cmd *cobra.Command, args []string) {
 	sourcePaths := config.LoadSourcePaths(args)
-	initConfig(sourcePaths)
+	parentConfig := initConfig(sourcePaths)
 	exitCode, _ := cmd.Flags().GetInt("exit-code")
 	staged, _ := cmd.Flags().GetBool("staged")
 
@@ -51,47 +50,18 @@ func runProtect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
 
-	cfg.Path, _ = cmd.Flags().GetString("config")
+	cfg.Path.Add(parentConfig)
+	unmarshallCobraFlagsRoot(&cfg, cmd)
+	unmarshallCobraFlagsDetect(&cfg, cmd)
 
 	start := time.Now()
 
 	// Setup detector
 	detector := detect.NewDetector(cfg)
-	detector.Config.Path, err = cmd.Flags().GetString("config")
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-	source, err := cmd.Flags().GetString("source")
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-	// if config path is not set, then use the {source}/.gitleaks.toml path.
-	// note that there may not be a `{source}/.gitleaks.toml` file, this is ok.
-	if detector.Config.Path == "" {
-		detector.Config.Path = filepath.Join(source, ".gitleaks.toml")
-	}
-	// set verbose flag
-	if detector.Config.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-	// set redact flag
-	if detector.Config.Redact, err = cmd.Flags().GetBool("redact"); err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-
-	if detector.Config.MaxTargetMegabytes, err = cmd.Flags().GetUint("max-target-megabytes"); err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-
-	// get log options for git scan
-	logOpts, err := cmd.Flags().GetString("log-opts")
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
 
 	// start git scan
 	var findings []report.Finding
-	findings, err = detector.DetectGit(source, logOpts, mode)
+	findings, err = detector.DetectGit(sourcePaths[0], mode)
 
 	if err != nil {
 		// don't exit on error, just log it

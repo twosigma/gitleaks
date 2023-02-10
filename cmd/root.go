@@ -54,12 +54,6 @@ func init() {
 	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
 	rootCmd.PersistentFlags().Bool("exit-on-failed-baseline", true, "exit if Gitleaks fails to parse a baseline file")
-
-	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	if err != nil {
-		log.Fatal().Msgf("err binding config %s", err.Error())
-	}
-
 }
 
 func initLog() {
@@ -95,9 +89,9 @@ func initLog() {
 	}
 }
 
-// initConfig is responsible for identifying the location of the Viper configuration.
-func initConfig(sourcePaths []string) {
-
+// initConfig is responsible for identifying the location of the Viper configuration. returns config path if it exists
+func initConfig(sourcePaths []string) string {
+	var sourcePath string
 	cfgPath, err := rootCmd.Flags().GetString("config")
 	if err != nil {
 		log.Fatal().Msg(err.Error())
@@ -107,15 +101,17 @@ func initConfig(sourcePaths []string) {
 	case cfgPath != "":
 		viper.SetConfigFile(cfgPath)
 		log.Debug().Msgf("using gitleaks config %s from `--config`", cfgPath)
+		sourcePath = cfgPath
 	case os.Getenv("GITLEAKS_CONFIG") != "":
 		envPath := os.Getenv("GITLEAKS_CONFIG")
 		viper.SetConfigFile(envPath)
 		log.Debug().Msgf("using gitleaks config from GITLEAKS_CONFIG env var: %s", envPath)
+		sourcePath = envPath
 	default:
 		if len(sourcePaths) > 1 {
 			log.Warn().Msg("multiple source files passed without explicitly specifying gitleaks configuration! using default config")
 			config.LoadDefaultViperConfig()
-			return
+			return ""
 		}
 
 		source := sourcePaths[0]
@@ -130,13 +126,13 @@ func initConfig(sourcePaths []string) {
 			log.Debug().Msgf("unable to load gitleaks config from %s since --source=%s is a file, using default config",
 				sourcePath, source)
 			config.LoadDefaultViperConfig()
-			return
+			return ""
 		}
 
 		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
 			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", sourcePath)
 			config.LoadDefaultViperConfig()
-			return
+			return ""
 		}
 
 		log.Debug().Msgf("using existing gitleaks config %s from `(--source)/.gitleaks.toml`", sourcePath)
@@ -147,6 +143,8 @@ func initConfig(sourcePaths []string) {
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatal().Msgf("unable to load gitleaks config, err: %s", err)
 	}
+
+	return sourcePath
 }
 
 // unmarshallCobraFlagsRoot updates a Detect API configuration structure with values passed by Cobra.

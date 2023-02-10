@@ -89,7 +89,7 @@ type ViperConfig struct {
 // Config contains parameters determining how the DetectAPI behaves across all modes
 type Config struct {
 	Extend      Extend
-	Path        string
+	Path        mapset.Set[string]
 	Description string
 	Rules       map[string]Rule
 	Allowlist   Allowlist
@@ -219,6 +219,7 @@ func (vc *ViperConfig) Translate(scanType GitScanType) (Config, error) {
 	allowlistEnclosingLinesRegexes := compileRegexPatterns(enclosingLinesPatterns)
 
 	c := Config{
+		Path:        mapset.NewSet[string](),
 		Description: vc.Description,
 		Extend:      vc.Extend,
 		Rules:       rulesMap,
@@ -328,6 +329,7 @@ func (c *Config) extendPath(scanType GitScanType) {
 		return
 	}
 	log.Debug().Msgf("extending config with %s", c.Extend.Path)
+	c.Path.Add(c.Extend.Path)
 	c.extend(cfg)
 }
 
