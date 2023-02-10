@@ -2,6 +2,7 @@ package detect
 
 import (
 	"errors"
+	"github.com/zricethezav/gitleaks/v8/config"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -127,7 +128,7 @@ func TestIgnoreIssuesInBaseline(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		d, _ := NewDetectorDefaultConfig()
+		d, _ := NewDetectorDefaultConfig(config.DetectType)
 		d.baseline = test.baseline
 		for _, finding := range test.findings {
 			d.addFinding(finding)

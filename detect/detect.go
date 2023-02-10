@@ -92,7 +92,7 @@ func NewDetector(cfg config.Config) *Detector {
 }
 
 // NewDetectorDefaultConfig creates a new detector with the default config
-func NewDetectorDefaultConfig() (*Detector, error) {
+func NewDetectorDefaultConfig(scanType config.GitScanType) (*Detector, error) {
 	viper.SetConfigType("toml")
 	err := viper.ReadConfig(strings.NewReader(config.DefaultConfig))
 	if err != nil {
@@ -103,7 +103,7 @@ func NewDetectorDefaultConfig() (*Detector, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := vc.Translate()
+	cfg, err := vc.Translate(scanType)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,10 @@ func (d *Detector) AddBaseline(baselinePath string) error {
 		d.baseline = baseline
 	}
 
-	d.Config.BaselinePath = append(d.Config.BaselinePath, baselinePath)
+	if added := d.Config.BaselinePath.Add(baselinePath); !added {
+		return fmt.Errorf("failed to add baseline path: %v", baselinePath)
+	}
+
 	return nil
 }
 
@@ -532,7 +535,7 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 
 	// check if filepath is allowed
 	if fragment.FilePath != "" && (d.Config.Allowlist.PathAllowed(fragment.FilePath) ||
-		fragment.FilePath == d.Config.Path || (d.Config.BaselinePath != "" && fragment.FilePath == d.Config.BaselinePath)) {
+		fragment.FilePath == d.Config.Path || d.Config.BaselinePath.Contains(fragment.FilePath)) {
 		return findings
 	}
 
