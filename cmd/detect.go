@@ -19,8 +19,6 @@ func init() {
 	rootCmd.AddCommand(detectCmd)
 
 	// Pass to Detect API
-	detectCmd.Flags().String("log-opts", "", "git log options")
-
 	detectCmd.Flags().Bool("follow-symlinks", false, "scan files that are symlinks to other files")
 	detectCmd.Flags().StringSlice("gitleaks-ignore", []string{}, "Pass paths to gitleaks ignore files explicitly.")
 

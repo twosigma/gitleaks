@@ -24,9 +24,10 @@ const gitleaksAllowSignature = "gitleaks:allow"
 // to parse the config file. This struct does not include regular expressions.
 // It is used as an intermediary to convert the Viper config to the Config struct.
 type ViperConfig struct {
+
+	// Non command-line fields
 	Description string
 	Extend      Extend
-	MaxWorkers  int
 	Rules       []struct {
 		ID          string
 		Description string
@@ -52,6 +53,22 @@ type ViperConfig struct {
 		Commits               []string
 		StopWords             []string
 	}
+
+	// Root command line fields
+	// Root command Detector API Flags
+	MaxWorkers         int
+	BaselinePath       []string
+	Verbose            bool
+	MaxTargetMegabytes int
+	Redact             bool
+	LogOpts            string
+
+	// Detect command line fields
+	FollowSymlinks bool
+	GitleaksIgnore []string
+
+	// Protect command line fields.
+	// NONE
 }
 
 // Config is a configuration struct that contains rules and an allowlist if present.

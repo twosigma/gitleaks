@@ -16,7 +16,6 @@ import (
 
 func init() {
 	// Pass to detect API
-	protectCmd.Flags().String("log-opts", "", "git log options")
 
 	// Don't pass to detect API
 	protectCmd.Flags().Bool("staged", false, "detect secrets in a --staged state")

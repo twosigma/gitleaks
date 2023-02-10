@@ -53,6 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
 	rootCmd.PersistentFlags().Int("max-target-megabytes", 0, "files larger than this will be skipped")
 	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
+	rootCmd.PersistentFlags().String("log-opts", "", "git log options")
 
 	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 	if err != nil {
