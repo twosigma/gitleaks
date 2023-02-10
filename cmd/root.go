@@ -45,16 +45,15 @@ func init() {
 	rootCmd.PersistentFlags().StringP("report-format", "f", "json", "output format (json, csv, sarif)")
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "log level (trace, debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().Bool("no-banner", false, "suppress banner")
-	rootCmd.PersistentFlags().Bool("no-exit-on-failed-baseline", false, "continue scanning even if Gitleaks fails to parse a baseline file")
-	rootCmd.PersistentFlags().Bool("no-exit-on-failed-ignore", false, "continue scanning even if Gitleaks fails to parse a gitleaks ignore file")
 
 	// Passed to Detector API
 	rootCmd.PersistentFlags().StringSliceP("baseline-path", "b", []string{}, "path(s) to baseline file with issues that can be ignored")
 	rootCmd.PersistentFlags().String("log-opts", "", "git log options")
-	rootCmd.PersistentFlags().Int("max-target-megabytes", 0, "files larger than this will be skipped")
-	rootCmd.PersistentFlags().IntP("max-workers", "j", 16, "maximum number of worker threads scanning files concurrently. Default value of 16")
+	rootCmd.PersistentFlags().Uint("max-target-megabytes", 0, "files larger than this will be skipped")
+	rootCmd.PersistentFlags().UintP("max-workers", "j", 16, "maximum number of worker threads scanning files concurrently. Default value of 16")
 	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
+	rootCmd.PersistentFlags().Bool("exit-on-failed-baseline", true, "exit if Gitleaks fails to parse a baseline file")
 
 	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 	if err != nil {
@@ -163,7 +162,7 @@ func unmarshallCobraFlagsRoot(config *config.Config, cmd *cobra.Command) {
 		var baselinePathSlice []string
 		baselinePathSlice, err = cmd.Flags().GetStringSlice("baseline-path")
 		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'baseline-paths'")
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'baseline-paths'")
 		}
 		config.BaselinePath = mapset.NewSet[string](baselinePathSlice...)
 	}
@@ -173,25 +172,25 @@ func unmarshallCobraFlagsRoot(config *config.Config, cmd *cobra.Command) {
 	if gitLogOptsChanged || !gitLogOptsSetByViper {
 		config.GitLogOpts, err = cmd.Flags().GetString("log-opts")
 		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'log-opts'")
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'log-opts'")
 		}
 	}
 
 	maxTargetMegabytesChanged := cmd.Flags().Changed("max-target-megabytes")
 	maxTargetMegabytesSetByViper := viper.IsSet("MaxTargetMegabytes")
 	if maxTargetMegabytesChanged || !maxTargetMegabytesSetByViper {
-		config.MaxTargetMegabytes, err = cmd.Flags().GetInt("max-target-megabytes")
+		config.MaxTargetMegabytes, err = cmd.Flags().GetUint("max-target-megabytes")
 		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'max-target-megabytes'")
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'max-target-megabytes'")
 		}
 	}
 
 	maxWorkersChanged := cmd.Flags().Changed("max-workers")
 	maxWorkersSetByViper := viper.IsSet("MaxWorkers")
 	if maxWorkersChanged || !maxWorkersSetByViper {
-		config.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
+		config.MaxWorkers, err = cmd.Flags().GetUint("max-workers")
 		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'max-workers'")
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'max-workers'")
 		}
 	}
 
@@ -200,7 +199,7 @@ func unmarshallCobraFlagsRoot(config *config.Config, cmd *cobra.Command) {
 	if redactChanged || !redactSetByViper {
 		config.Redact, err = cmd.Flags().GetBool("redact")
 		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'redact'")
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'redact'")
 		}
 	}
 
@@ -209,7 +208,16 @@ func unmarshallCobraFlagsRoot(config *config.Config, cmd *cobra.Command) {
 	if verboseChanged || !verboseSetByViper {
 		config.Verbose, err = cmd.Flags().GetBool("verbose")
 		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'verbose'")
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'verbose'")
+		}
+	}
+
+	exitOnFailedBaselineChanged := cmd.Flags().Changed("exit-on-failed-baseline")
+	exitOnFailedBaselineeSetByViper := viper.IsSet("ExitOnFailedBaseline")
+	if exitOnFailedBaselineChanged || !exitOnFailedBaselineeSetByViper {
+		config.ExitOnFailedBaseline, err = cmd.Flags().GetBool("exit-on-failed-baseline")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'exit-on-failed-baseline'")
 		}
 	}
 

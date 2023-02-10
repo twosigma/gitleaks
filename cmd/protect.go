@@ -79,7 +79,7 @@ func runProtect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("")
 	}
 
-	if detector.Config.MaxTargetMegabytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
+	if detector.Config.MaxTargetMegabytes, err = cmd.Flags().GetUint("max-target-megabytes"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
@@ -117,3 +117,6 @@ func runProtect(cmd *cobra.Command, args []string) {
 		os.Exit(exitCode)
 	}
 }
+
+// unmarshallCobraFlagsProtect updates a Detect API configuration structure with values passed by Cobra.
+func unmarshallCobraFlagsProtect(cfg *config.Config, cmd *cobra.Command) {}

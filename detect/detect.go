@@ -81,7 +81,7 @@ func NewDetector(cfg config.Config) *Detector {
 		DFA:                  true,
 	})
 
-	return &Detector{
+	detector := Detector{
 		commitMap:                make(map[string]bool),
 		gitleaksIgnore:           make(map[string]bool),
 		gitleaksIgnoreWriteMutex: sync.Mutex{},
@@ -89,6 +89,54 @@ func NewDetector(cfg config.Config) *Detector {
 		Config:                   cfg,
 		prefilter:                builder.Build(cfg.Keywords),
 	}
+
+	return &detector
+}
+
+// AddBaselineFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
+func (d *Detector) AddBaselineFilesFromConfig() error {
+	failedPaths := make([]string, 0)
+
+	// Load baseline files
+	for baseline := range d.Config.BaselinePath.Iter() {
+		err := d.AddBaseline(baseline)
+		if err != nil {
+			if d.Config.ExitOnFailedBaseline {
+				log.Fatal().Err(err).Msgf("Failed to load baseline path: %v", baseline)
+			}
+
+			failedPaths = append(failedPaths, err.Error())
+		}
+	}
+
+	if len(failedPaths) > 0 {
+		return fmt.Errorf("Failed to load %d baselines:\n%v", len(failedPaths), strings.Join(failedPaths, "\n"))
+	}
+
+	return nil
+}
+
+// AddIgnoreFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
+func (d *Detector) AddIgnoreFilesFromConfig() error {
+	failedPaths := make([]string, 0)
+
+	// Load baseline files
+	for _, ignore := range d.Config.DetectConfig.GitleaksIgnore {
+		err := d.AddGitleaksIgnore(ignore)
+		if err != nil {
+			if d.Config.DetectConfig.ExitOnFailedIgnore {
+				log.Fatal().Err(err).Msgf("Failed to load ignore file path: %v", ignore)
+			}
+
+			failedPaths = append(failedPaths, err.Error())
+		}
+	}
+
+	if len(failedPaths) > 0 {
+		return fmt.Errorf("Failed to load %d ignore files:\n%v", len(failedPaths), strings.Join(failedPaths, "\n"))
+	}
+
+	return nil
 }
 
 // NewDetectorDefaultConfig creates a new detector with the default config
@@ -197,7 +245,7 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 
 	// If flag configure and raw data size bigger then the flag
 	if d.Config.MaxTargetMegabytes > 0 {
-		rawLength := len(fragment.Raw) / 1000000
+		rawLength := uint(len(fragment.Raw) / 1000000)
 		if rawLength > d.Config.MaxTargetMegabytes {
 			log.Debug().Msgf("skipping file: %s scan due to size: %d", fragment.FilePath, rawLength)
 			return findings

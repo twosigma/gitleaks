@@ -69,12 +69,14 @@ type ViperConfig struct {
 
 	// Root command line fields
 	// Root command Detector API Flags
-	MaxWorkers         int
-	BaselinePath       []string
-	Verbose            bool
-	MaxTargetMegabytes int
-	Redact             bool
-	GitLogOpts         string
+	MaxWorkers           uint
+	BaselinePath         []string
+	Verbose              bool
+	MaxTargetMegabytes   uint
+	Redact               bool
+	GitLogOpts           string
+	ExitOnFailedBaseline bool
+	ExitOnFailedIgnore   bool
 
 	// Detect command line fields
 	FollowSymlinks bool
@@ -103,16 +105,19 @@ type Config struct {
 	GitLogOpts string
 
 	// Files larger than this will be skipped
-	MaxTargetMegabytes int
+	MaxTargetMegabytes uint
 
 	// Maximum number of GoRoutines allowed to scan concurrently
-	MaxWorkers int
+	MaxWorkers uint
 
 	// Redact is a flag to redact findings.
 	Redact bool
 
 	// Verbose is a flag to print findings
 	Verbose bool
+
+	// ExitOnFailedBaseline indicates if Detector API should exit when a baseline file fails to be registered.
+	ExitOnFailedBaseline bool
 
 	// Detect mode specific configuration
 	DetectConfig *DetectConfig
@@ -128,6 +133,9 @@ type DetectConfig struct {
 
 	// Paths to gitleaks ignore files.
 	GitleaksIgnore []string
+
+	// ExitOnFailedIgnore indicates if Detector API should exit when a gitleaks ignore file fails to be registered.
+	ExitOnFailedIgnore bool
 }
 
 // ProtectConfig contains parameters determining how DetectAPI behaves in ProtectType/ProtectTypeStaged mode
@@ -224,18 +232,20 @@ func (vc *ViperConfig) Translate(scanType GitScanType) (Config, error) {
 		Keywords:     keywords,
 		orderedRules: orderedRules,
 
-		MaxWorkers:         vc.MaxWorkers,
-		BaselinePath:       mapset.NewSet[string](vc.BaselinePath...),
-		Verbose:            vc.Verbose,
-		MaxTargetMegabytes: vc.MaxTargetMegabytes,
-		Redact:             vc.Redact,
-		GitLogOpts:         vc.GitLogOpts,
+		MaxWorkers:           vc.MaxWorkers,
+		BaselinePath:         mapset.NewSet[string](vc.BaselinePath...),
+		Verbose:              vc.Verbose,
+		MaxTargetMegabytes:   vc.MaxTargetMegabytes,
+		Redact:               vc.Redact,
+		GitLogOpts:           vc.GitLogOpts,
+		ExitOnFailedBaseline: vc.ExitOnFailedBaseline,
 	}
 
 	if scanType == DetectType {
 		c.DetectConfig = &DetectConfig{
-			FollowSymlinks: vc.FollowSymlinks,
-			GitleaksIgnore: vc.GitleaksIgnore,
+			FollowSymlinks:     vc.FollowSymlinks,
+			GitleaksIgnore:     vc.GitleaksIgnore,
+			ExitOnFailedIgnore: vc.ExitOnFailedIgnore,
 		}
 	}
 
