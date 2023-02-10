@@ -103,7 +103,7 @@ type Config struct {
 	GitLogOpts string
 
 	// Files larger than this will be skipped
-	MaxTargetMegaBytes int
+	MaxTargetMegabytes int
 
 	// Maximum number of GoRoutines allowed to scan concurrently
 	MaxWorkers int
@@ -227,7 +227,7 @@ func (vc *ViperConfig) Translate(scanType GitScanType) (Config, error) {
 		MaxWorkers:         vc.MaxWorkers,
 		BaselinePath:       mapset.NewSet[string](vc.BaselinePath...),
 		Verbose:            vc.Verbose,
-		MaxTargetMegaBytes: vc.MaxTargetMegabytes,
+		MaxTargetMegabytes: vc.MaxTargetMegabytes,
 		Redact:             vc.Redact,
 		GitLogOpts:         vc.GitLogOpts,
 	}

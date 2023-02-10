@@ -79,7 +79,7 @@ func runProtect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err).Msg("")
 	}
 
-	if detector.Config.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
+	if detector.Config.MaxTargetMegabytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 

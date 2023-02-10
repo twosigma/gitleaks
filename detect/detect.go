@@ -196,9 +196,9 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 	}
 
 	// If flag configure and raw data size bigger then the flag
-	if d.Config.MaxTargetMegaBytes > 0 {
+	if d.Config.MaxTargetMegabytes > 0 {
 		rawLength := len(fragment.Raw) / 1000000
-		if rawLength > d.Config.MaxTargetMegaBytes {
+		if rawLength > d.Config.MaxTargetMegabytes {
 			log.Debug().Msgf("skipping file: %s scan due to size: %d", fragment.FilePath, rawLength)
 			return findings
 		}

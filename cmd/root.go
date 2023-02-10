@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/zricethezav/gitleaks/v8/config"
 	"os"
 	"path/filepath"
@@ -59,6 +60,7 @@ func init() {
 	if err != nil {
 		log.Fatal().Msgf("err binding config %s", err.Error())
 	}
+
 }
 
 func initLog() {
@@ -146,6 +148,73 @@ func initConfig(sourcePaths []string) {
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatal().Msgf("unable to load gitleaks config, err: %s", err)
 	}
+}
+
+// unmarshallCobraFlagsRoot updates a Detect API configuration structure with values passed by Cobra.
+// This is favored over viper.BindPflag because the function allows us to override a viper parameter
+// if and only if viper left the value unset, or the user explicitly set the parameter using Cobra.
+func unmarshallCobraFlagsRoot(config *config.Config, cmd *cobra.Command) {
+	// TODO: This code is repetitive. Would be nice to use generics here somehow
+	baselinePathsChanged := cmd.Flags().Changed("baseline-path")
+	baselinePathSetByViper := viper.IsSet("BaselinePath")
+	if baselinePathsChanged || !baselinePathSetByViper {
+		baselinePathSlice, err := cmd.Flags().GetStringSlice("baseline-path")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'baseline-paths'")
+		}
+		config.BaselinePath = mapset.NewSet[string](baselinePathSlice...)
+	}
+
+	gitLogOptsChanged := cmd.Flags().Changed("log-opts")
+	gitLogOptsSetByViper := viper.IsSet("GitLogOpts")
+	if gitLogOptsChanged || !gitLogOptsSetByViper {
+		gitLogOpts, err := cmd.Flags().GetString("log-opts")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'log-opts'")
+		}
+		config.GitLogOpts = gitLogOpts
+	}
+
+	maxTargetMegabytesChanged := cmd.Flags().Changed("max-target-megabytes")
+	maxTargetMegabytesSetByViper := viper.IsSet("MaxTargetMegabytes")
+	if maxTargetMegabytesChanged || !maxTargetMegabytesSetByViper {
+		maxTargetMegabytes, err := cmd.Flags().GetInt("max-target-megabytes")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'max-target-megabytes'")
+		}
+		config.MaxTargetMegabytes = maxTargetMegabytes
+	}
+
+	maxWorkersChanged := cmd.Flags().Changed("max-workers")
+	maxWorkersSetByViper := viper.IsSet("MaxWorkers")
+	if maxWorkersChanged || !maxWorkersSetByViper {
+		maxWorkers, err := cmd.Flags().GetInt("max-workers")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'max-workers'")
+		}
+		config.MaxWorkers = maxWorkers
+	}
+
+	redactChanged := cmd.Flags().Changed("redact")
+	redactSetByViper := viper.IsSet("Redact")
+	if redactChanged || !redactSetByViper {
+		redact, err := cmd.Flags().GetBool("redact")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'redact'")
+		}
+		config.Redact = redact
+	}
+
+	verboseChanged := cmd.Flags().Changed("verbose")
+	verboseSetByViper := viper.IsSet("Verbose")
+	if verboseChanged || !verboseSetByViper {
+		verbose, err := cmd.Flags().GetBool("verbose")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'verbose'")
+		}
+		config.Verbose = verbose
+	}
+
 }
 
 func Execute() {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -36,19 +37,38 @@ func runDetect(cmd *cobra.Command, args []string) {
 	sourcePaths := config.LoadSourcePaths(args)
 	initConfig(sourcePaths)
 	var (
-		vc       config.ViperConfig
-		findings []report.Finding
-		err      error
+		vc             config.ViperConfig
+		findings       []report.Finding
+		err            error
+		decodeMetadata mapstructure.Metadata
 	)
 
+	err = viper.Unmarshal(&vc, func(decoderConfig *mapstructure.DecoderConfig) {
+		decoderConfig.Metadata = &decodeMetadata
+	})
+
 	// Load config
-	if err = viper.Unmarshal(&vc); err != nil {
+	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
 	cfg, err := vc.Translate(config.DetectType)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
+
+	unmarshallCobraFlagsRoot(&cfg, cmd)
+
+	// Override values from viper config.
+	// If value has changed  cobra config, OR it was unset when unmarshalling viper, then write its value in from cobra
+	symlinksChanged := cmd.Flags().Changed("follow-symlinks")
+	symlinksSetByViper := viper.IsSet("FollowSymlinks")
+	if symlinksChanged || !symlinksSetByViper {
+		cfg.DetectConfig.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'follow-symlinks'")
+		}
+	}
+
 	// TODO: Make Path a list of paths.
 	cfg.Path, _ = cmd.Flags().GetString("config")
 
@@ -73,7 +93,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	// set max target megabytes flag
-	if detector.Config.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
+	if detector.Config.MaxTargetMegabytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
 		// TODO: Why is there no message here?
 		log.Fatal().Err(err).Msg("")
 	}
