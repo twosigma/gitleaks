@@ -62,31 +62,31 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	// set verbose flag
-	if detector.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
+	if detector.Config.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
 	// set redact flag
-	if detector.Redact, err = cmd.Flags().GetBool("redact"); err != nil {
+	if detector.Config.Redact, err = cmd.Flags().GetBool("redact"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
 	// set max target megabytes flag
-	if detector.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
+	if detector.Config.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
 		// TODO: Why is there no message here?
 		log.Fatal().Err(err).Msg("")
 	}
 
-	// TODO: Make a set and validate method for each flag. input is viper config + cmd + detector.
+	// TODO: Make a set and validate method for each flag. input is viper config + cmd + detector.Config.
 	// Set Max Workers. Preference Cobra > Viper > Cobra Default
 	switch {
 	case cmd.Flags().Changed("max-workers"):
-		detector.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
+		detector.Config.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
 	case vc.MaxWorkers != 0:
-		detector.MaxWorkers = vc.MaxWorkers
+		detector.Config.MaxWorkers = vc.MaxWorkers
 	default:
-		detector.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
-		log.Info().Msgf("Using default number of workers: %v.", detector.MaxWorkers)
+		detector.Config.MaxWorkers, err = cmd.Flags().GetInt("max-workers")
+		log.Info().Msgf("Using default number of workers: %v.", detector.Config.MaxWorkers)
 	}
 
 	if err != nil {
@@ -147,7 +147,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	// set follow symlinks flag
-	if detector.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks"); err != nil {
+	if detector.Config.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 

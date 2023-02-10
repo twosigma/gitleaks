@@ -60,15 +60,15 @@ func runProtect(cmd *cobra.Command, args []string) {
 		detector.Config.Path = filepath.Join(source, ".gitleaks.toml")
 	}
 	// set verbose flag
-	if detector.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
+	if detector.Config.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 	// set redact flag
-	if detector.Redact, err = cmd.Flags().GetBool("redact"); err != nil {
+	if detector.Config.Redact, err = cmd.Flags().GetBool("redact"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
-	if detector.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
+	if detector.Config.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 

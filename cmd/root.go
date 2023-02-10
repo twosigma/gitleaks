@@ -54,11 +54,6 @@ func init() {
 	if err != nil {
 		log.Fatal().Msgf("err binding config %s", err.Error())
 	}
-
-	err = viper.BindPFlag("maxworkers", rootCmd.PersistentFlags().Lookup("max-workers"))
-	if err != nil {
-		log.Fatal().Msgf("err binding max workers %s", err.Error())
-	}
 }
 
 func initLog() {
@@ -83,9 +78,8 @@ func initLog() {
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
-}
 
-func initConfig(sourcePaths []string) {
+	// Set banner config
 	hideBanner, err := rootCmd.Flags().GetBool("no-banner")
 	if err != nil {
 		log.Fatal().Msg(err.Error())
@@ -93,6 +87,10 @@ func initConfig(sourcePaths []string) {
 	if !hideBanner {
 		_, _ = fmt.Fprint(os.Stderr, banner)
 	}
+}
+
+func initConfig(sourcePaths []string) {
+
 	cfgPath, err := rootCmd.Flags().GetString("config")
 	if err != nil {
 		log.Fatal().Msg(err.Error())
