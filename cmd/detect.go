@@ -57,17 +57,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	unmarshallCobraFlagsRoot(&cfg, cmd)
-
-	// Override values from viper config.
-	// If value has changed  cobra config, OR it was unset when unmarshalling viper, then write its value in from cobra
-	symlinksChanged := cmd.Flags().Changed("follow-symlinks")
-	symlinksSetByViper := viper.IsSet("FollowSymlinks")
-	if symlinksChanged || !symlinksSetByViper {
-		cfg.DetectConfig.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks")
-		if err != nil {
-			log.Fatal().Msg("Failed to resolve value of 'follow-symlinks'")
-		}
-	}
+	unmarshallCobraFlagsDetect(&cfg, cmd)
 
 	// TODO: Make Path a list of paths.
 	cfg.Path, _ = cmd.Flags().GetString("config")
@@ -257,4 +247,28 @@ func FormatDuration(d time.Duration) string {
 		scale /= 10
 	}
 	return d.Round(scale / 100).String()
+}
+
+// unmarshallCobraFlagsDetect updates a Detect API configuration structure with values passed by Cobra.
+func unmarshallCobraFlagsDetect(cfg *config.Config, cmd *cobra.Command) {
+	var err error
+
+	symlinksChanged := cmd.Flags().Changed("follow-symlinks")
+	symlinksSetByViper := viper.IsSet("FollowSymlinks")
+	if symlinksChanged || !symlinksSetByViper {
+		cfg.DetectConfig.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'follow-symlinks'")
+		}
+	}
+
+	gitleakIgnoreChanged := cmd.Flags().Changed("gitleaks-ignore")
+	gitleakIgnoreSetByViper := viper.IsSet("GitleaksIgnore")
+	if gitleakIgnoreChanged || !gitleakIgnoreSetByViper {
+		cfg.DetectConfig.GitleaksIgnore, err = cmd.Flags().GetStringSlice("gitleaks-ignore")
+		if err != nil {
+			log.Fatal().Msg("Failed to resolve value of 'gitleaks-ignore'")
+		}
+	}
+
 }
