@@ -3,7 +3,7 @@ package config
 import (
 	_ "embed"
 	"fmt"
-	mapset "github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set/v2"
 	"regexp"
 	"strings"
 
@@ -97,7 +97,7 @@ type Config struct {
 	orderedRules []string
 
 	// Paths to baseline files
-	BaselinePath mapset.Set
+	BaselinePath mapset.Set[string]
 
 	// Git log options
 	GitLogOpts string
@@ -225,7 +225,7 @@ func (vc *ViperConfig) Translate(scanType GitScanType) (Config, error) {
 		orderedRules: orderedRules,
 
 		MaxWorkers:         vc.MaxWorkers,
-		BaselinePath:       mapset.NewSet[string](vc.BaselinePath),
+		BaselinePath:       mapset.NewSet[string](vc.BaselinePath...),
 		Verbose:            vc.Verbose,
 		MaxTargetMegaBytes: vc.MaxTargetMegabytes,
 		Redact:             vc.Redact,

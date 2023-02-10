@@ -31,19 +31,28 @@ var protectCmd = &cobra.Command{
 func runProtect(cmd *cobra.Command, args []string) {
 	sourcePaths := config.LoadSourcePaths(args)
 	initConfig(sourcePaths)
+	exitCode, _ := cmd.Flags().GetInt("exit-code")
+	staged, _ := cmd.Flags().GetBool("staged")
+
+	var mode config.GitScanType
+	if staged {
+		mode = config.ProtectStagedType
+	} else {
+		mode = config.ProtectType
+	}
+
 	var vc config.ViperConfig
 
 	if err := viper.Unmarshal(&vc); err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
-	cfg, err := vc.Translate()
+	cfg, err := vc.Translate(mode)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
 
 	cfg.Path, _ = cmd.Flags().GetString("config")
-	exitCode, _ := cmd.Flags().GetInt("exit-code")
-	staged, _ := cmd.Flags().GetBool("staged")
+
 	start := time.Now()
 
 	// Setup detector
@@ -82,11 +91,8 @@ func runProtect(cmd *cobra.Command, args []string) {
 
 	// start git scan
 	var findings []report.Finding
-	if staged {
-		findings, err = detector.DetectGit(source, logOpts, detect.ProtectStagedType)
-	} else {
-		findings, err = detector.DetectGit(source, logOpts, detect.ProtectType)
-	}
+	findings, err = detector.DetectGit(source, logOpts, mode)
+
 	if err != nil {
 		// don't exit on error, just log it
 		log.Error().Err(err).Msg("")

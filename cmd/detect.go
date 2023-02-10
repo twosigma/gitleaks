@@ -45,7 +45,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	if err = viper.Unmarshal(&vc); err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
-	cfg, err := vc.Translate()
+	cfg, err := vc.Translate(config.DetectType)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
@@ -148,7 +148,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	// set follow symlinks flag
-	if detector.Config.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks"); err != nil {
+	if detector.Config.DetectConfig.FollowSymlinks, err = cmd.Flags().GetBool("follow-symlinks"); err != nil {
 		log.Fatal().Err(err).Msg("")
 	}
 
@@ -179,7 +179,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 			log.Fatal().Err(err).Msg("")
 		}
 		// TODO: Add an args function that check that if we are scanning git repo it implies there is only one source.
-		findings, err = detector.DetectGit(sourcePaths[0], logOpts, detect.DetectType)
+		findings, err = detector.DetectGit(sourcePaths[0], logOpts, config.DetectType)
 		if err != nil {
 			// don't exit on error, just log it
 			log.Error().Err(err).Msg("")
