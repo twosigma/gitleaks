@@ -49,6 +49,16 @@ func runDetect(cmd *cobra.Command, args []string) {
 		log.Fatal().Err(err)
 	}
 
+	if cmd.Flags().Changed("source") {
+		log.Warn().Msgf("use of the --source flag is deprecated. pass file paths as command line args: ./gitleaks [opts...] <file_1> ... <file_n>")
+		source, err := cmd.Flags().GetString("source")
+		if err != nil {
+			log.Fatal().Err(err)
+		}
+
+		args = append(args, source)
+	}
+
 	// TODO: Validate this works when pipe occurs.
 	sourcePaths := config.LoadSourcePaths(args)
 

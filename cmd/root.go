@@ -54,6 +54,9 @@ func init() {
 	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
 	rootCmd.PersistentFlags().Bool("exit-on-failed-baseline", true, "exit if Gitleaks fails to parse a baseline file")
+
+	// Deprecated
+	rootCmd.PersistentFlags().StringP("source", "s", ".", "path to source (default: $PWD)")
 }
 
 func initLog() {
@@ -123,7 +126,7 @@ func initConfig(sourcePaths []string) string {
 		}
 
 		if !fileInfo.IsDir() {
-			log.Debug().Msgf("unable to load gitleaks config from %s since --source=%s is a file, using default config",
+			log.Debug().Msgf("unable to load gitleaks config from %s since it is a file, using default config",
 				sourcePath, source)
 			config.LoadDefaultViperConfig()
 			return ""
@@ -135,7 +138,7 @@ func initConfig(sourcePaths []string) string {
 			return ""
 		}
 
-		log.Debug().Msgf("using existing gitleaks config %s from `(--source)/.gitleaks.toml`", sourcePath)
+		log.Debug().Msgf("using existing gitleaks config %s", sourcePath)
 		viper.SetConfigFile(sourcePath)
 	}
 
