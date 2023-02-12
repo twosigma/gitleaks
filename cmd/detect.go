@@ -31,15 +31,32 @@ var detectCmd = &cobra.Command{
 }
 
 func runDetect(cmd *cobra.Command, args []string) {
-	// TODO: Validate this works when pipe occurs.
-	sourcePaths := config.LoadSourcePaths(args)
-	parentConfig := initConfig(sourcePaths)
 	var (
 		vc       config.ViperConfig
 		findings []report.Finding
 		err      error
 	)
 
+	// - git: scan the history of the repo
+	// - no-git: scan files by treating the repo as a plain directory
+	noGitMode, err := cmd.Flags().GetBool("no-git")
+	if err != nil {
+		log.Fatal().Err(err).Msg("could not call GetBool() for no-git")
+	}
+
+	pipeMode, err := cmd.Flags().GetBool("pipe")
+	if err != nil {
+		log.Fatal().Err(err)
+	}
+
+	// TODO: Validate this works when pipe occurs.
+	sourcePaths := config.LoadSourcePaths(args)
+
+	if !noGitMode && !pipeMode && len(sourcePaths) > 1 {
+		log.Fatal().Msgf("Cannot scan more than one git repository at a time. Pass one repo path, or use the --no-git flag")
+	}
+
+	parentConfig := initConfig(sourcePaths)
 	// Load viper config
 	err = viper.Unmarshal(&vc)
 	if err != nil {
@@ -73,17 +90,6 @@ func runDetect(cmd *cobra.Command, args []string) {
 
 	// TODO: Add warning about unbounded max memory size.
 	// determine what type of scan:
-	// - git: scan the history of the repo
-	// - no-git: scan files by treating the repo as a plain directory
-	noGitMode, err := cmd.Flags().GetBool("no-git")
-	if err != nil {
-		log.Fatal().Err(err).Msg("could not call GetBool() for no-git")
-	}
-
-	pipeMode, err := cmd.Flags().GetBool("pipe")
-	if err != nil {
-		log.Fatal().Err(err)
-	}
 
 	switch {
 	case noGitMode:
