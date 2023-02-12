@@ -372,7 +372,7 @@ func TestDetect(t *testing.T) {
 			t.Error(err)
 		}
 		cfg, err := vc.Translate(config.DetectType)
-		cfg.Path.Add(filepath.Join(configPath, tt.cfgName+".toml"))
+		cfg.SetParentPath(filepath.Join(configPath, tt.cfgName+".toml"))
 		if tt.wantError != nil {
 			if err == nil {
 				t.Errorf("expected error")
@@ -498,6 +498,8 @@ func TestFromGit(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
+		cfg.GitLogOpts = tt.logOpts
 		detector := NewDetector(cfg)
 		findings, err := detector.DetectGit(tt.source, config.DetectType)
 		if err != nil {

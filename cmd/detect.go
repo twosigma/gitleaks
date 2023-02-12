@@ -49,7 +49,9 @@ func runDetect(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
-	cfg.Path.Add(parentConfig)
+
+	// Write path to parent config
+	cfg.SetParentPath(parentConfig)
 	unmarshallCobraFlagsRoot(&cfg, cmd)
 	unmarshallCobraFlagsDetect(&cfg, cmd)
 
@@ -70,7 +72,6 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 
 	// TODO: Add warning about unbounded max memory size.
-
 	// determine what type of scan:
 	// - git: scan the history of the repo
 	// - no-git: scan files by treating the repo as a plain directory

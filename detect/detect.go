@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/h2non/filetype"
 	"github.com/zricethezav/gitleaks/v8/config"
 	"github.com/zricethezav/gitleaks/v8/detect/git"
@@ -88,6 +89,18 @@ func NewDetector(cfg config.Config) *Detector {
 		findings:                 NewThreadSafeSlice([]report.Finding{}),
 		Config:                   cfg,
 		prefilter:                builder.Build(cfg.Keywords),
+	}
+
+	if detector.Config.MaxWorkers == 0 {
+		detector.Config.MaxWorkers = 4
+	}
+
+	if detector.Config.BaselinePath == nil {
+		detector.Config.BaselinePath = mapset.NewSet[string]()
+	}
+
+	if detector.Config.Path == nil {
+		detector.Config.BaselinePath = mapset.NewSet[string]()
 	}
 
 	return &detector

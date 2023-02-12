@@ -353,6 +353,17 @@ func (c *Config) extend(extensionConfig Config) {
 		extensionConfig.Allowlist.EnclosingLinesRegexes...)
 }
 
+// SetParentPath adds the file-path that created a Config struct c in its paths field c
+func (c *Config) SetParentPath(parentPath string) {
+	if c.Path == nil {
+		c.Path = mapset.NewSet[string]()
+	}
+
+	if parentPath != "" {
+		c.Path.Add(parentPath)
+	}
+}
+
 func LoadSourcePaths(sources []string) []string {
 	if len(sources) == 0 {
 		return []string{"."}
