@@ -87,10 +87,6 @@ func runDetect(cmd *cobra.Command, args []string) {
 
 	// Setup detector
 	detector := detect.NewDetector(cfg)
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-
 	if err = detector.AddIgnoreFilesFromConfig(); err != nil {
 		log.Warn().Err(err)
 	}
@@ -123,11 +119,12 @@ func runDetect(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	duration := FormatDuration(time.Since(start))
 	// log info about the scan
 	if err == nil {
-		logScanSuccess(start, findings)
+		logScanSuccess(duration, findings)
 	} else {
-		logScanFailure(start, findings)
+		logScanFailure(duration, findings)
 	}
 
 	// write report if desired
@@ -154,8 +151,8 @@ func runDetect(cmd *cobra.Command, args []string) {
 	}
 }
 
-func logScanFailure(start time.Time, findings []report.Finding) {
-	log.Warn().Msgf("partial scan completed in %s", FormatDuration(time.Since(start)))
+func logScanFailure(scanDuration string, findings []report.Finding) {
+	log.Warn().Msgf("partial scan completed in %s", scanDuration)
 	if len(findings) != 0 {
 		log.Warn().Msgf("%d leaks found in partial scan", len(findings))
 	} else {
@@ -163,8 +160,8 @@ func logScanFailure(start time.Time, findings []report.Finding) {
 	}
 }
 
-func logScanSuccess(start time.Time, findings []report.Finding) {
-	log.Info().Msgf("scan completed in %s", FormatDuration(time.Since(start)))
+func logScanSuccess(scanDuration string, findings []report.Finding) {
+	log.Info().Msgf("scan completed in %s", scanDuration)
 	if len(findings) != 0 {
 		log.Warn().Msgf("leaks found: %d", len(findings))
 	} else {
