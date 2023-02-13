@@ -1,0 +1,3 @@
+testdata/repos/nogit_test_subdirectory_ignore/subdir_2/subdir_2a/subdir_2a_1/subdir_2a_1.go:aws-access-token:4
+testdata/repos/nogit_test_subdirectory_ignore/subdir_2/subdir_2a/subdir_2a_1/subdir_2a_1.go:aws-access-token:5
+testdata/repos/nogit_test_subdirectory_ignore/subdir_2/subdir_2a/subdir_2a_1/subdir_2a_1.go:aws-access-token:6
