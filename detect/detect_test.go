@@ -563,6 +563,11 @@ func TestFromFiles(t *testing.T) {
 				},
 			},
 		},
+		{
+			cfgName:          "multiple_gitleaks_ignore_files",
+			sources:          []string{filepath.Join(repoBasePath, "nogit_test_subdirectory_ignore")},
+			expectedFindings: []report.Finding{},
+		},
 	}
 
 	for _, tt := range tests {
