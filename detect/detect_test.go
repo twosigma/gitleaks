@@ -518,6 +518,7 @@ func TestFromFiles(t *testing.T) {
 	tests := []struct {
 		cfgName          string
 		sources          []string
+		configPaths      []string
 		expectedFindings []report.Finding
 	}{
 		{
@@ -564,8 +565,12 @@ func TestFromFiles(t *testing.T) {
 			},
 		},
 		{
-			cfgName:          "multiple_gitleaks_ignore_files",
-			sources:          []string{filepath.Join(repoBasePath, "nogit_test_subdirectory_ignore")},
+			cfgName: "multiple_gitleaks_ignore_files",
+			sources: []string{filepath.Join(repoBasePath, "nogit_multi_ignore")},
+			configPaths: []string{
+				filepath.Join(repoBasePath, "nogit_multi_ignore", ".gitleaksignore"),
+				filepath.Join(repoBasePath, "nogit_multi_ignore", ".gitleaksignore2"),
+			},
 			expectedFindings: []report.Finding{},
 		},
 	}
@@ -586,7 +591,13 @@ func TestFromFiles(t *testing.T) {
 		}
 		cfg, _ := vc.Translate(config.DetectType)
 		cfg.DetectConfig.FollowSymlinks = true
+		cfg.DetectConfig.GitleaksIgnore = tt.configPaths
 		detector := NewDetector(cfg)
+
+		if err = detector.AddIgnoreFilesFromConfig(); err != nil {
+			t.Error(err)
+		}
+
 		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)

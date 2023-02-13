@@ -1,5 +1,0 @@
-testdata/repos/nogit_test_subdirectory_ignore/main.go:aws-access-token:4
-testdata/repos/nogit_test_subdirectory_ignore/main.go:aws-access-token:6
-testdata/repos/nogit_test_subdirectory_ignore/main.go:aws-access-token:8
-testdata/repos/nogit_test_subdirectory_ignore/main.go:aws-access-token:10
-testdata/repos/nogit_test_subdirectory_ignore/subdir_1/subdir_1b/subdir_1b.go:aws-access-token:4
