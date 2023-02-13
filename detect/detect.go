@@ -491,22 +491,6 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 						return nil
 					}
 					if fInfo.Mode().IsRegular() {
-						// If the file is a .gitleaksignore file, add it to known fingerprints
-						match, err := filepath.Match(".gitleaksignore", filepath.Base(path))
-						//match, err := filepath.Match(".*.gitleaksignore", path)
-						if err != nil {
-							return err
-						}
-
-						// Matches .gitleaksignore file.
-						if match {
-							log.Debug().Msgf("Found gitleaks ignore file at %v", path)
-							if err := d.AddGitleaksIgnore(path); err == nil {
-								return nil
-							}
-							log.Warn().Msgf("Failed to load gitleaks ignore file at %v", path)
-						}
-
 						// Otherwise, scan the file
 						paths.Append(
 							scanTarget{
