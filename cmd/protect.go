@@ -29,8 +29,12 @@ var protectCmd = &cobra.Command{
 
 func runProtect(cmd *cobra.Command, args []string) {
 	staged, _ := cmd.Flags().GetBool("staged")
-
 	sourcePaths := config.LoadSourcePaths(args)
+
+	if len(sourcePaths) > 1 {
+		log.Fatal().Msgf("Cannot protect more than one git repository at a time. Pass one repo path.")
+	}
+
 	parentConfig := initConfig(sourcePaths)
 
 	var mode config.GitScanType
