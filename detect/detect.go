@@ -538,7 +538,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 	// Wait for all paths to be enumerated.
 	err := sourcePathIterators.Wait()
 	if err != nil {
-		log.Debug().Msgf("Finished with error")
+		log.Error().Msg("hit error(s) when iterating over source path files.")
 		return d.findings.slice, err
 	}
 
