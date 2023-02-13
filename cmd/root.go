@@ -133,7 +133,7 @@ func initConfig(sourcePaths []string) string {
 		}
 
 		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
-			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", sourcePath)
+			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config")
 			config.LoadDefaultViperConfig()
 			return ""
 		}

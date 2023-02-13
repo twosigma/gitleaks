@@ -437,7 +437,7 @@ type scanTarget struct {
 func (d *Detector) scanFilePath(target scanTarget) error {
 	b, err := os.ReadFile(target.Path)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to read file at path: %v.\nerr=%v", target.Path, err)
 	}
 
 	mimetype, err := filetype.Match(b)
@@ -477,8 +477,9 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 
 	// Walk over each source path
 	for _, source := range sources {
+		sourcePath := source
 		sourcePathIterators.Go(func() error {
-			return filepath.Walk(source,
+			return filepath.Walk(sourcePath,
 				func(path string, fInfo os.FileInfo, err error) error {
 					if err != nil {
 						return err
@@ -498,6 +499,7 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 
 						// Matches .gitleaksignore file.
 						if match {
+							log.Debug().Msgf("Found gitleaks ignore file at %v", path)
 							if err := d.AddGitleaksIgnore(path); err == nil {
 								return nil
 							}

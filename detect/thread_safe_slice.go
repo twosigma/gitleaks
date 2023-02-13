@@ -19,8 +19,8 @@ func NewThreadSafeSlice[K any](slice []K) ThreadSafeSlice[K] {
 // Append item to slice
 func (tslice *ThreadSafeSlice[K]) Append(item K) {
 	tslice.mutex.Lock()
-	defer tslice.mutex.Unlock()
 	tslice.slice = append(tslice.slice, item)
+	tslice.mutex.Unlock()
 }
 
 // Pop item from slice. True if Pop returned valid element
