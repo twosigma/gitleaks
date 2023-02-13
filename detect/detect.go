@@ -133,7 +133,7 @@ func (d *Detector) AddBaselineFilesFromConfig() error {
 func (d *Detector) AddIgnoreFilesFromConfig() error {
 	failedPaths := make([]string, 0)
 
-	// Load baseline files
+	// Load ignore files
 	for _, ignore := range d.Config.DetectConfig.GitleaksIgnore {
 		err := d.AddGitleaksIgnore(ignore)
 		if err != nil {
