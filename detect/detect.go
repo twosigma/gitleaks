@@ -492,7 +492,8 @@ func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
 					}
 					if fInfo.Mode().IsRegular() {
 						// If the file is a .gitleaksignore file, add it to known fingerprints
-						match, err := filepath.Match("*.gitleaksignore", path)
+						match, err := filepath.Match(".gitleaksignore", filepath.Base(path))
+						//match, err := filepath.Match(".*.gitleaksignore", path)
 						if err != nil {
 							return err
 						}
