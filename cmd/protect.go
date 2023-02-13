@@ -52,7 +52,7 @@ func runProtect(cmd *cobra.Command, args []string) {
 
 	cfg.Path.Add(parentConfig)
 	unmarshallCobraFlagsRoot(&cfg, cmd)
-	unmarshallCobraFlagsDetect(&cfg, cmd)
+	unmarshallCobraFlagsProtect(&cfg, cmd)
 
 	start := time.Now()
 
