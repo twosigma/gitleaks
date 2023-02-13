@@ -18,7 +18,10 @@ func init() {
 
 	// Don't pass to detect API
 	protectCmd.Flags().Bool("staged", false, "detect secrets in a --staged state")
-	//protectCmd.Flags().BoolP("", , false, "pass file names to gitleaks pre-commit hook.")
+	protectCmd.Flags().Bool("no-patch-files", false, "scan files passed as command-line arguments instead of git patch files."+
+		" flag will result in the entire contents of file being scanned instead of just lines changed since the prior commit."+
+		" flag is functionally equivalent to `gitleaks detect --no-git`, but it does not take into account gitleaks ignore files.")
+
 	rootCmd.AddCommand(protectCmd)
 }
 
@@ -29,15 +32,20 @@ var protectCmd = &cobra.Command{
 }
 
 func runProtect(cmd *cobra.Command, args []string) {
+	staged, _ := cmd.Flags().GetBool("staged")
+	noPatchFiles, _ := cmd.Flags().GetBool("no-patch-files")
+
 	sourcePaths := config.LoadSourcePaths(args)
 	parentConfig := initConfig(sourcePaths)
-	staged, _ := cmd.Flags().GetBool("staged")
 
 	var mode config.GitScanType
-	if staged {
+	switch {
+	case staged:
 		mode = config.ProtectStagedType
-	} else {
-		mode = config.ProtectType
+	case noPatchFiles:
+		mode = config.DetectType
+	default:
+		mode = config.ProtectStagedType
 	}
 
 	start := time.Now()
@@ -57,6 +65,10 @@ func runProtect(cmd *cobra.Command, args []string) {
 
 	// Setup detector
 	detector := detect.NewDetector(cfg)
+
+	if err = detector.AddBaselineFilesFromConfig(); err != nil {
+		log.Warn().Err(err)
+	}
 
 	// start git scan
 	var findings []report.Finding
