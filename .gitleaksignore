@@ -715,7 +715,7 @@ cmd/generate/config/rules/sidekiq.go:sidekiq-sensitive-url:54
 cmd/generate/config/rules/sidekiq.go:sidekiq-sensitive-url:55
 cmd/generate/config/rules/sidekiq.go:sidekiq-sensitive-url:56
 cmd/generate/config/rules/sidekiq.go:sidekiq-sensitive-url:57
-config/config_test.go:aws-access-token:31
+config/config_test.go:aws-access-token:32
 detect/detect_test.go:sidekiq-secret:120
 detect/detect_test.go:sidekiq-secret:126
 detect/detect_test.go:sidekiq-secret:142
