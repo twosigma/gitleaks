@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -117,6 +118,7 @@ func TestTranslate(t *testing.T) {
 						RuleID:      "aws-secret-key-again",
 					},
 				},
+				Path: mapset.NewSet[string]("../testdata/config/base.toml", "../testdata/config/extend_1.toml", "../testdata/config/extend_2.toml"),
 			},
 		},
 	}
@@ -137,14 +139,18 @@ func TestTranslate(t *testing.T) {
 			t.Error(err)
 		}
 		cfg, err := vc.Translate(DetectType)
+		cfg.SetParentPath(filepath.Join(configPath, tt.cfgName+".toml"))
 		if tt.wantError != nil {
 			if err == nil {
 				t.Errorf("expected error")
 			}
 			assert.Equal(t, tt.wantError, err)
 		}
-
 		assert.Equal(t, cfg.Rules, tt.cfg.Rules)
+		if tt.cfg.Path != nil {
+			symDiff := tt.cfg.Path.SymmetricDifference(cfg.Path)
+			assert.Equal(t, 0, symDiff.Cardinality())
+		}
 	}
 }
 

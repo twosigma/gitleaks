@@ -308,7 +308,6 @@ func (c *Config) extendDefault(scanType GitScanType) {
 	}
 	log.Debug().Msg("extending config with default config")
 	c.extend(cfg)
-
 }
 
 func (c *Config) extendPath(scanType GitScanType) {
@@ -341,6 +340,9 @@ func (c *Config) extend(extensionConfig Config) {
 			c.Keywords = append(c.Keywords, rule.Keywords...)
 		}
 	}
+
+	c.Path = c.Path.Union(extensionConfig.Path)
+	c.BaselinePath = c.Path.Union(extensionConfig.BaselinePath)
 
 	// append allowlists, not attempting to merge
 	c.Allowlist.Commits = append(c.Allowlist.Commits,
