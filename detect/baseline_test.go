@@ -190,6 +190,7 @@ func TestExitOnFailedBaseline(t *testing.T) {
 	// Note: These tests won't show up in coverage ;(
 	// https://stackoverflow.com/questions/26225513/how-to-test-os-exit-scenarios-in-go
 	// https://go.dev/talks/2014/testing.slide#23
+
 	if os.Getenv("CRASHING_PROCESS_LOAD_BASELINES_FROM_CONFIG") == "1" {
 		config := config.Config{
 			ExitOnFailedBaseline: true,
@@ -210,7 +211,7 @@ func TestExitOnFailedBaseline(t *testing.T) {
 	}
 
 	// Check that LoadBaselineFilesFromConfig fails
-	cmd := exec.Command(os.Args[0], "-test.run=TestExitOnFailedBaselineLoad")
+	cmd := exec.Command(os.Args[0], "-test.run=TestExitOnFailedBaseline")
 	cmd.Env = append(os.Environ(), "CRASHING_PROCESS_LOAD_BASELINES_FROM_CONFIG=1")
 	err := cmd.Run()
 
@@ -220,7 +221,7 @@ func TestExitOnFailedBaseline(t *testing.T) {
 	}
 
 	// Check that AddBaseline fails
-	cmd = exec.Command(os.Args[0], "-test.run=TestExitOnFailedBaselineLoad")
+	cmd = exec.Command(os.Args[0], "-test.run=TestExitOnFailedBaseline")
 	cmd.Env = append(os.Environ(), "CRASHING_PROCESS_ADD_BASELINES=1")
 	err = cmd.Run()
 

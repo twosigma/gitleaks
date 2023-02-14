@@ -61,7 +61,7 @@ func runDetect(cmd *cobra.Command, args []string) {
 
 	// TODO: Validate this works when pipe occurs.
 	sourcePaths := config.LoadSourcePaths(args)
-	log.Warn().Msgf("File paths passed: %v", sourcePaths)
+	log.Debug().Msgf("File paths passed: %v", sourcePaths)
 
 	if !noGitMode && !pipeMode && len(sourcePaths) > 1 {
 		log.Fatal().Msgf("Cannot scan more than one git repository at a time. Pass one repo path, or use the --no-git flag")
