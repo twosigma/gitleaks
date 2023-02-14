@@ -2,7 +2,9 @@ package detect
 
 import (
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -518,7 +520,7 @@ func TestFromFiles(t *testing.T) {
 	tests := []struct {
 		cfgName          string
 		sources          []string
-		configPaths      []string
+		configPaths      mapset.Set[string]
 		expectedFindings []report.Finding
 	}{
 		{
@@ -567,10 +569,10 @@ func TestFromFiles(t *testing.T) {
 		{
 			cfgName: "multiple_gitleaks_ignore_files",
 			sources: []string{filepath.Join(repoBasePath, "nogit_multi_ignore")},
-			configPaths: []string{
+			configPaths: mapset.NewSet[string](
 				filepath.Join(repoBasePath, "nogit_multi_ignore", ".gitleaksignore"),
 				filepath.Join(repoBasePath, "nogit_multi_ignore", ".gitleaksignore2"),
-			},
+			),
 			expectedFindings: []report.Finding{},
 		},
 	}
@@ -591,6 +593,7 @@ func TestFromFiles(t *testing.T) {
 		}
 		cfg, _ := vc.Translate(config.DetectType)
 		cfg.DetectConfig.FollowSymlinks = true
+
 		cfg.DetectConfig.GitleaksIgnore = tt.configPaths
 		detector := NewDetector(&cfg)
 
@@ -691,4 +694,32 @@ func moveDotGit(from, to string) error {
 		}
 	}
 	return nil
+}
+
+// Tests that detector exits when in exit-on-failed-ignore is enabled.
+func TestExitOnFailedIgnore(t *testing.T) {
+	// Note: These tests won't show up in coverage ;(
+	// https://stackoverflow.com/questions/26225513/how-to-test-os-exit-scenarios-in-go
+	// https://go.dev/talks/2014/testing.slide#23
+	if os.Getenv("CRASHING_PROCESS_EXIT_ON_FAILED_IGNORE") == "1" {
+		config := config.Config{
+			DetectConfig: &config.DetectConfig{
+				GitleaksIgnore:     mapset.NewSet[string]("../testdata/noexist/.gitleaksignore"),
+				ExitOnFailedIgnore: true,
+			},
+		}
+		d := NewDetector(&config)
+		d.AddIgnoreFilesFromConfig()
+		return
+	}
+
+	// Check that LoadBaselineFilesFromConfig fails
+	cmd := exec.Command(os.Args[0], "-test.run=TestExitOnFailedIgnore")
+	cmd.Env = append(os.Environ(), "CRASHING_PROCESS_EXIT_ON_FAILED_IGNORE=1")
+	err := cmd.Run()
+
+	// Something went wrong if the process exited with 0, OR did not return an exit error.
+	if e, ok := err.(*exec.ExitError); !ok || e.Success() {
+		t.Fatalf("gitleaks FAILED to crash when exit-on-failed-ignore was enabled. AddIgnoreFilesFromConfig failed to crash")
+	}
 }

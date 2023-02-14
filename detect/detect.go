@@ -109,8 +109,11 @@ func NewDetector(cfg *config.Config) *Detector {
 
 // LoadBaselineFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
 func (d *Detector) LoadBaselineFilesFromConfig() error {
-	failedPaths := make([]string, 0)
+	if d.Config.BaselinePath == nil {
+		return nil
+	}
 
+	failedPaths := make([]string, 0)
 	// Load baseline files
 	for baseline := range d.Config.BaselinePath.Iter() {
 		findings, err := LoadBaseline(baseline)
@@ -133,11 +136,15 @@ func (d *Detector) LoadBaselineFilesFromConfig() error {
 
 // AddIgnoreFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
 func (d *Detector) AddIgnoreFilesFromConfig() error {
+	if d.Config.DetectConfig == nil || d.Config.DetectConfig.GitleaksIgnore == nil {
+		return nil
+	}
+
 	failedPaths := make([]string, 0)
 
 	// Load ignore files
-	for _, ignore := range d.Config.DetectConfig.GitleaksIgnore {
-		err := d.AddGitleaksIgnore(ignore)
+	for ignore := range d.Config.DetectConfig.GitleaksIgnore.Iter() {
+		err := d.LoadGitleaksIgnore(ignore)
 		if err != nil {
 			if d.Config.DetectConfig.ExitOnFailedIgnore {
 				log.Fatal().Err(err).Msgf("Failed to load ignore file path: %v", ignore)
@@ -173,7 +180,7 @@ func NewDetectorDefaultConfig(scanType config.GitScanType) (*Detector, error) {
 	return NewDetector(&cfg), nil
 }
 
-func (d *Detector) AddGitleaksIgnore(gitleaksIgnorePath string) error {
+func (d *Detector) LoadGitleaksIgnore(gitleaksIgnorePath string) error {
 	file, err := os.Open(gitleaksIgnorePath)
 
 	if err != nil {
@@ -593,7 +600,11 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 
 	// check if filepath is allowed
 	if fragment.FilePath != "" && (d.Config.Allowlist.PathAllowed(fragment.FilePath) ||
-		d.Config.Path.Contains(fragment.FilePath) || d.Config.BaselinePath.Contains(fragment.FilePath)) {
+		d.Config.Path.Contains(fragment.FilePath) ||
+		d.Config.BaselinePath.Contains(fragment.FilePath) ||
+		(d.Config.DetectConfig != nil &&
+			d.Config.DetectConfig.GitleaksIgnore != nil &&
+			d.Config.DetectConfig.GitleaksIgnore.Contains(fragment.FilePath))) {
 		return findings
 	}
 

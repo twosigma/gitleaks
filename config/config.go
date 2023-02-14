@@ -132,7 +132,7 @@ type DetectConfig struct {
 	FollowSymlinks bool
 
 	// Paths to gitleaks ignore files.
-	GitleaksIgnore []string
+	GitleaksIgnore mapset.Set[string]
 
 	// ExitOnFailedIgnore indicates if Detector API should exit when a gitleaks ignore file fails to be registered.
 	ExitOnFailedIgnore bool
@@ -245,7 +245,7 @@ func (vc *ViperConfig) Translate(scanType GitScanType) (Config, error) {
 	if scanType == DetectType {
 		c.DetectConfig = &DetectConfig{
 			FollowSymlinks:     vc.FollowSymlinks,
-			GitleaksIgnore:     vc.GitleaksIgnore,
+			GitleaksIgnore:     mapset.NewSet[string](vc.GitleaksIgnore...),
 			ExitOnFailedIgnore: vc.ExitOnFailedIgnore,
 		}
 	}

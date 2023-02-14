@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -192,10 +193,12 @@ func unmarshallCobraFlagsDetect(cfg *config.Config, cmd *cobra.Command) {
 	gitleakIgnoreChanged := cmd.Flags().Changed("gitleaks-ignore")
 	gitleakIgnoreSetByViper := viper.IsSet("GitleaksIgnore")
 	if gitleakIgnoreChanged || !gitleakIgnoreSetByViper {
-		cfg.DetectConfig.GitleaksIgnore, err = cmd.Flags().GetStringSlice("gitleaks-ignore")
+		var ignoreSlice []string
+		ignoreSlice, err = cmd.Flags().GetStringSlice("gitleaks-ignore")
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to resolve value of 'gitleaks-ignore'")
 		}
+		cfg.DetectConfig.GitleaksIgnore = mapset.NewSet[string](ignoreSlice...)
 	}
 
 	exitOnFailedIgnoreChanged := cmd.Flags().Changed("exit-on-failed-ignore")
