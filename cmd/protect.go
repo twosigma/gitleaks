@@ -60,9 +60,9 @@ func runProtect(cmd *cobra.Command, args []string) {
 	unmarshallCobraFlagsProtect(&cfg, cmd)
 
 	// Setup detector
-	detector := detect.NewDetector(cfg)
+	detector := detect.NewDetector(&cfg)
 
-	if err = detector.AddBaselineFilesFromConfig(); err != nil {
+	if err = detector.LoadBaselineFilesFromConfig(); err != nil {
 		log.Warn().Err(err)
 	}
 

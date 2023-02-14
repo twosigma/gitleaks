@@ -2,6 +2,8 @@ package detect
 
 import (
 	"errors"
+	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/zricethezav/gitleaks/v8/config"
 	"testing"
 
@@ -135,4 +137,50 @@ func TestIgnoreIssuesInBaseline(t *testing.T) {
 		}
 		assert.Equal(t, test.expectCount, len(d.findings.slice))
 	}
+}
+
+func TestAddInvalidBaselineFilesFromConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  config.Config
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "nil_baselinePath",
+			config: config.Config{
+				BaselinePath: nil,
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "invalid_baselinePath",
+			config: config.Config{
+				BaselinePath: mapset.NewSet[string]("/NON/EXISTENT/FILE/3789273892"),
+			},
+			wantErr: assert.Error,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := NewDetector(&tt.config)
+			tt.wantErr(t, d.LoadBaselineFilesFromConfig(), fmt.Sprintf("LoadBaselineFilesFromConfig()"))
+		})
+	}
+}
+
+// Test that multiple valid baseline files can be read in using LoadBaselineFilesFromConfig.
+func TestValidBaselineFilesFromConfig(t *testing.T) {
+	t.Run("", func(t *testing.T) {
+		config := config.Config{
+			BaselinePath: mapset.NewSet[string]("../testdata/baseline/baseline.json", "../testdata/baseline/baseline2.json"),
+		}
+		d := NewDetector(&config)
+		err := d.LoadBaselineFilesFromConfig()
+		assert.Nil(t, err)
+
+		assert.Len(t, d.baseline, 2)
+		assert.Equal(t, 2, d.Config.BaselinePath.Cardinality())
+		assert.Equal(t, 32, d.baseline[0].StartLine)
+		assert.Equal(t, 33, d.baseline[1].StartLine)
+	})
 }

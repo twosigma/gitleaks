@@ -87,11 +87,11 @@ func runDetect(cmd *cobra.Command, args []string) {
 	start := time.Now()
 
 	// Setup detector
-	detector := detect.NewDetector(cfg)
+	detector := detect.NewDetector(&cfg)
 	if err = detector.AddIgnoreFilesFromConfig(); err != nil {
 		log.Warn().Err(err)
 	}
-	if err = detector.AddBaselineFilesFromConfig(); err != nil {
+	if err = detector.LoadBaselineFilesFromConfig(); err != nil {
 		log.Warn().Err(err)
 	}
 

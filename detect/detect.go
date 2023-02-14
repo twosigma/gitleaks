@@ -27,7 +27,7 @@ import (
 // Detector is the main detector struct
 type Detector struct {
 	// Config is the configuration for the detector
-	Config config.Config
+	Config *config.Config
 
 	// commitMap is used to keep track of commits that have been scanned.
 	// This is only used for logging purposes and git scans.
@@ -74,7 +74,7 @@ type Fragment struct {
 }
 
 // NewDetector creates a new detector with the given config
-func NewDetector(cfg config.Config) *Detector {
+func NewDetector(cfg *config.Config) *Detector {
 	builder := ahocorasick.NewAhoCorasickBuilder(ahocorasick.Opts{
 		AsciiCaseInsensitive: true,
 		MatchOnlyWholeWords:  false,
@@ -89,6 +89,7 @@ func NewDetector(cfg config.Config) *Detector {
 		findings:                 NewThreadSafeSlice([]report.Finding{}),
 		Config:                   cfg,
 		prefilter:                builder.Build(cfg.Keywords),
+		baseline:                 []report.Finding{},
 	}
 
 	if detector.Config.MaxWorkers == 0 {
@@ -100,26 +101,27 @@ func NewDetector(cfg config.Config) *Detector {
 	}
 
 	if detector.Config.Path == nil {
-		detector.Config.BaselinePath = mapset.NewSet[string]()
+		detector.Config.Path = mapset.NewSet[string]()
 	}
 
 	return &detector
 }
 
-// AddBaselineFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
-func (d *Detector) AddBaselineFilesFromConfig() error {
+// LoadBaselineFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
+func (d *Detector) LoadBaselineFilesFromConfig() error {
 	failedPaths := make([]string, 0)
 
 	// Load baseline files
 	for baseline := range d.Config.BaselinePath.Iter() {
-		err := d.AddBaseline(baseline)
+		findings, err := LoadBaseline(baseline)
 		if err != nil {
 			if d.Config.ExitOnFailedBaseline {
 				log.Fatal().Err(err).Msgf("Failed to load baseline path: %v", baseline)
 			}
-
 			failedPaths = append(failedPaths, err.Error())
 		}
+
+		d.baseline = append(d.baseline, findings...)
 	}
 
 	if len(failedPaths) > 0 {
@@ -168,7 +170,7 @@ func NewDetectorDefaultConfig(scanType config.GitScanType) (*Detector, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewDetector(cfg), nil
+	return NewDetector(&cfg), nil
 }
 
 func (d *Detector) AddGitleaksIgnore(gitleaksIgnorePath string) error {
@@ -197,7 +199,7 @@ func (d *Detector) AddBaseline(baselinePath string) error {
 		if err != nil {
 			return err
 		}
-		d.baseline = baseline
+		d.baseline = append(d.baseline, baseline...)
 	}
 
 	if added := d.Config.BaselinePath.Add(baselinePath); !added {

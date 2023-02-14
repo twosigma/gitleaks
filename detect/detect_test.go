@@ -379,7 +379,7 @@ func TestDetect(t *testing.T) {
 			}
 			assert.Equal(t, tt.wantError, err)
 		}
-		d := NewDetector(cfg)
+		d := NewDetector(&cfg)
 
 		findings := d.Detect(tt.fragment)
 		assert.ElementsMatch(t, tt.expectedFindings, findings)
@@ -500,7 +500,7 @@ func TestFromGit(t *testing.T) {
 		}
 
 		cfg.GitLogOpts = tt.logOpts
-		detector := NewDetector(cfg)
+		detector := NewDetector(&cfg)
 		findings, err := detector.DetectGit(tt.source, config.DetectType)
 		if err != nil {
 			t.Error(err)
@@ -592,7 +592,7 @@ func TestFromFiles(t *testing.T) {
 		cfg, _ := vc.Translate(config.DetectType)
 		cfg.DetectConfig.FollowSymlinks = true
 		cfg.DetectConfig.GitleaksIgnore = tt.configPaths
-		detector := NewDetector(cfg)
+		detector := NewDetector(&cfg)
 
 		if err = detector.AddIgnoreFilesFromConfig(); err != nil {
 			t.Error(err)
@@ -653,7 +653,7 @@ func TestDetectWithSymlinks(t *testing.T) {
 		}
 		cfg, _ := vc.Translate(config.DetectType)
 		cfg.DetectConfig.FollowSymlinks = true
-		detector := NewDetector(cfg)
+		detector := NewDetector(&cfg)
 		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
