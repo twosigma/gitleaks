@@ -95,9 +95,6 @@ func runDetect(cmd *cobra.Command, args []string) {
 		log.Warn().Err(err)
 	}
 
-	// TODO: Add warning about unbounded max memory size.
-	// determine what type of scan:
-
 	switch {
 	case noGitMode:
 		findings, err = detector.DetectFiles(sourcePaths)
