@@ -197,13 +197,21 @@ func (d *Detector) AddBaseline(baselinePath string) error {
 	if baselinePath != "" {
 		baseline, err := LoadBaseline(baselinePath)
 		if err != nil {
+			if d.Config.ExitOnFailedBaseline {
+				log.Fatal().Err(err).Msgf("failed to load baseline path: %v", baseline)
+			}
+
 			return err
 		}
 		d.baseline = append(d.baseline, baseline...)
 	}
 
 	if added := d.Config.BaselinePath.Add(baselinePath); !added {
-		return fmt.Errorf("failed to add baseline path: %v", baselinePath)
+		err := fmt.Errorf("failed to add baseline path: %v", baselinePath)
+		if d.Config.ExitOnFailedBaseline {
+			log.Fatal().Err(err)
+		}
+		return err
 	}
 
 	return nil

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/zricethezav/gitleaks/v8/config"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -170,17 +172,61 @@ func TestAddInvalidBaselineFilesFromConfig(t *testing.T) {
 
 // Test that multiple valid baseline files can be read in using LoadBaselineFilesFromConfig.
 func TestValidBaselineFilesFromConfig(t *testing.T) {
-	t.Run("", func(t *testing.T) {
+	config := config.Config{
+		BaselinePath: mapset.NewSet[string]("../testdata/baseline/baseline.json", "../testdata/baseline/baseline2.json"),
+	}
+	d := NewDetector(&config)
+	err := d.LoadBaselineFilesFromConfig()
+	assert.Nil(t, err)
+
+	assert.Len(t, d.baseline, 2)
+	assert.Equal(t, 2, d.Config.BaselinePath.Cardinality())
+	assert.Equal(t, 32, d.baseline[0].StartLine)
+	assert.Equal(t, 33, d.baseline[1].StartLine)
+}
+
+// Tests that detector exits when in exit-on-failed-baseline is enabled.
+func TestExitOnFailedBaseline(t *testing.T) {
+	// Note: These tests won't show up in coverage ;(
+	// https://stackoverflow.com/questions/26225513/how-to-test-os-exit-scenarios-in-go
+	// https://go.dev/talks/2014/testing.slide#23
+	if os.Getenv("CRASHING_PROCESS_LOAD_BASELINES_FROM_CONFIG") == "1" {
 		config := config.Config{
-			BaselinePath: mapset.NewSet[string]("../testdata/baseline/baseline.json", "../testdata/baseline/baseline2.json"),
+			ExitOnFailedBaseline: true,
+			BaselinePath:         mapset.NewSet[string]("../testdata/baseline/notfound.json"),
 		}
 		d := NewDetector(&config)
-		err := d.LoadBaselineFilesFromConfig()
-		assert.Nil(t, err)
+		d.LoadBaselineFilesFromConfig()
+		return
+	}
 
-		assert.Len(t, d.baseline, 2)
-		assert.Equal(t, 2, d.Config.BaselinePath.Cardinality())
-		assert.Equal(t, 32, d.baseline[0].StartLine)
-		assert.Equal(t, 33, d.baseline[1].StartLine)
-	})
+	if os.Getenv("CRASHING_PROCESS_ADD_BASELINES") == "1" {
+		config := config.Config{
+			ExitOnFailedBaseline: true,
+		}
+		d := NewDetector(&config)
+		d.AddBaseline("../testdata/baseline/notfound.json")
+		return
+	}
+
+	// Check that LoadBaselineFilesFromConfig fails
+	cmd := exec.Command(os.Args[0], "-test.run=TestExitOnFailedBaselineLoad")
+	cmd.Env = append(os.Environ(), "CRASHING_PROCESS_LOAD_BASELINES_FROM_CONFIG=1")
+	err := cmd.Run()
+
+	// Something went wrong if the process exited with 0, OR did not return an exit error.
+	if e, ok := err.(*exec.ExitError); !ok || e.Success() {
+		t.Fatalf("gitleaks FAILED to crash when exit-on-failed-baseline was enabled. LoadBaselineFilesFromConfig failed to crash")
+	}
+
+	// Check that AddBaseline fails
+	cmd = exec.Command(os.Args[0], "-test.run=TestExitOnFailedBaselineLoad")
+	cmd.Env = append(os.Environ(), "CRASHING_PROCESS_ADD_BASELINES=1")
+	err = cmd.Run()
+
+	// Something went wrong if the process exited with 0, OR did not return an exit error.
+	if e, ok := err.(*exec.ExitError); !ok || e.Success() {
+		t.Fatalf("gitleaks FAILED to crash when exit-on-failed-baseline was enabled. AddBaseline failed to crash.")
+	}
+
 }
