@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"regexp"
 	"testing"
 
@@ -144,5 +145,45 @@ func TestTranslate(t *testing.T) {
 		}
 
 		assert.Equal(t, cfg.Rules, tt.cfg.Rules)
+	}
+}
+
+func TestConfig_SetParentPath(t *testing.T) {
+	type args struct {
+		parentPath string
+	}
+	tests := []struct {
+		name  string
+		path  string
+		field Config
+	}{
+		{
+			name: "test_nil_path_mapset",
+			path: "/some/path",
+			field: Config{
+				Path: nil,
+			},
+		},
+		{
+			name: "test_non_nil_path_mapset",
+			path: "/some/path",
+			field: Config{
+				Path: mapset.NewSet[string](),
+			},
+		},
+		{
+			name: "test_non_empty_path_mapset",
+			path: "/some/path",
+			field: Config{
+				Path: mapset.NewSet[string]("/some/other/path"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.field.SetParentPath(tt.path)
+			assert.NotNil(t, tt.field.Path)
+			assert.True(t, tt.field.Path.Contains(tt.path))
+		})
 	}
 }
