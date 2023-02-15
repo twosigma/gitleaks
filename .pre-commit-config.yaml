@@ -1,5 +1,0 @@
-repos:
--   repo: .
-    rev: fe3212a51f231de251549d2d0ce0dcabfc337464
-    hooks:
-    -   id: gitleaks-no-patch-files
