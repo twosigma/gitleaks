@@ -4,6 +4,17 @@
   entry: gitleaks protect --verbose --redact --staged
   language: golang
   pass_filenames: false
+
+- id: gitleaks-no-patch-files
+  name: Detect hardcoded secrets
+  description: Detect hardcoded secrets using Gitleaks. This variant of the hook does not utilize `git diff` to generate patch files for scanning.
+    Instead, it scans the full contents of files passed to it by the pre-commit framework. To utilize a particular configuration file, set the GITLEAKS_CONFIG
+    environment variable.
+  entry: gitleaks detect --verbose --redact --no-git --log-level trace
+  language: golang
+  pass_filenames: true
+  require_serial: true
+
 - id: gitleaks-docker
   name: Detect hardcoded secrets
   description: Detect hardcoded secrets using Gitleaks

@@ -4,6 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/h2non/filetype"
+	"github.com/zricethezav/gitleaks/v8/config"
+	"github.com/zricethezav/gitleaks/v8/detect/git"
+	"github.com/zricethezav/gitleaks/v8/report"
 	"io"
 	"io/fs"
 	"os"
@@ -12,11 +17,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/h2non/filetype"
-	"github.com/zricethezav/gitleaks/v8/config"
-	"github.com/zricethezav/gitleaks/v8/detect/git"
-	"github.com/zricethezav/gitleaks/v8/report"
-
 	"github.com/fatih/semgroup"
 	"github.com/gitleaks/go-gitdiff/gitdiff"
 	ahocorasick "github.com/petar-dambovaliev/aho-corasick"
@@ -24,49 +24,19 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Type used to differentiate between git scan types:
-// $ gitleaks detect
-// $ gitleaks protect
-// $ gitleaks protect staged
-type GitScanType int
-
-const (
-	DetectType GitScanType = iota
-	ProtectType
-	ProtectStagedType
-)
-
 // Detector is the main detector struct
 type Detector struct {
 	// Config is the configuration for the detector
-	Config config.Config
-
-	// Redact is a flag to redact findings. This is exported
-	// so users using gitleaks as a library can set this flag
-	// without calling `detector.Start(cmd *cobra.Command)`
-	Redact bool
-
-	// verbose is a flag to print findings
-	Verbose bool
-
-	// files larger than this will be skipped
-	MaxTargetMegaBytes int
-
-	// followSymlinks is a flag to enable scanning symlink files
-	FollowSymlinks bool
+	Config *config.Config
 
 	// commitMap is used to keep track of commits that have been scanned.
 	// This is only used for logging purposes and git scans.
 	commitMap map[string]bool
 
-	// findingMutex is to prevent concurrent access to the
-	// findings slice when adding findings.
-	findingMutex *sync.Mutex
-
-	// findings is a slice of report.Findings. This is the result
+	// findings is a thread safe slice of report.Findings. This is the result
 	// of the detector's scan which can then be used to generate a
 	// report.
-	findings []report.Finding
+	findings ThreadSafeSlice[report.Finding]
 
 	// prefilter is a ahocorasick struct used for doing efficient string
 	// matching given a set of words (keywords from the rules in the config)
@@ -75,11 +45,11 @@ type Detector struct {
 	// a list of known findings that should be ignored
 	baseline []report.Finding
 
-	// path to baseline
-	baselinePath string
-
 	// gitleaksIgnore
 	gitleaksIgnore map[string]bool
+
+	// Mutex for concurrent map writes
+	gitleaksIgnoreWriteMutex sync.Mutex
 }
 
 // Fragment contains the data to be scanned
@@ -104,7 +74,7 @@ type Fragment struct {
 }
 
 // NewDetector creates a new detector with the given config
-func NewDetector(cfg config.Config) *Detector {
+func NewDetector(cfg *config.Config) *Detector {
 	builder := ahocorasick.NewAhoCorasickBuilder(ahocorasick.Opts{
 		AsciiCaseInsensitive: true,
 		MatchOnlyWholeWords:  false,
@@ -112,18 +82,87 @@ func NewDetector(cfg config.Config) *Detector {
 		DFA:                  true,
 	})
 
-	return &Detector{
-		commitMap:      make(map[string]bool),
-		gitleaksIgnore: make(map[string]bool),
-		findingMutex:   &sync.Mutex{},
-		findings:       make([]report.Finding, 0),
-		Config:         cfg,
-		prefilter:      builder.Build(cfg.Keywords),
+	detector := Detector{
+		commitMap:                make(map[string]bool),
+		gitleaksIgnore:           make(map[string]bool),
+		gitleaksIgnoreWriteMutex: sync.Mutex{},
+		findings:                 NewThreadSafeSlice([]report.Finding{}),
+		Config:                   cfg,
+		prefilter:                builder.Build(cfg.Keywords),
+		baseline:                 []report.Finding{},
 	}
+
+	if detector.Config.MaxWorkers == 0 {
+		detector.Config.MaxWorkers = 4
+	}
+
+	if detector.Config.BaselinePath == nil {
+		detector.Config.BaselinePath = mapset.NewSet[string]()
+	}
+
+	if detector.Config.Path == nil {
+		detector.Config.Path = mapset.NewSet[string]()
+	}
+
+	return &detector
+}
+
+// LoadBaselineFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
+func (d *Detector) LoadBaselineFilesFromConfig() error {
+	if d.Config.BaselinePath == nil {
+		return nil
+	}
+
+	failedPaths := make([]string, 0)
+	// Load baseline files
+	for baseline := range d.Config.BaselinePath.Iter() {
+		findings, err := LoadBaseline(baseline)
+		if err != nil {
+			if d.Config.ExitOnFailedBaseline {
+				log.Fatal().Err(err).Msgf("Failed to load baseline path: %v", baseline)
+			}
+			failedPaths = append(failedPaths, err.Error())
+		}
+
+		d.baseline = append(d.baseline, findings...)
+	}
+
+	if len(failedPaths) > 0 {
+		return fmt.Errorf("Failed to load %d baselines:\n%v", len(failedPaths), strings.Join(failedPaths, "\n"))
+	}
+
+	return nil
+}
+
+// AddIgnoreFilesFromConfig prompts the detector to parse all the baseline file paths stored in its config structure
+func (d *Detector) AddIgnoreFilesFromConfig() error {
+	if d.Config.DetectConfig == nil || d.Config.DetectConfig.GitleaksIgnore == nil {
+		return nil
+	}
+
+	failedPaths := make([]string, 0)
+
+	// Load ignore files
+	for ignore := range d.Config.DetectConfig.GitleaksIgnore.Iter() {
+		err := d.LoadGitleaksIgnore(ignore)
+		if err != nil {
+			if d.Config.DetectConfig.ExitOnFailedIgnore {
+				log.Fatal().Err(err).Msgf("Failed to load ignore file path: %v", ignore)
+			}
+
+			failedPaths = append(failedPaths, err.Error())
+		}
+	}
+
+	if len(failedPaths) > 0 {
+		return fmt.Errorf("Failed to load %d ignore files:\n%v", len(failedPaths), strings.Join(failedPaths, "\n"))
+	}
+
+	return nil
 }
 
 // NewDetectorDefaultConfig creates a new detector with the default config
-func NewDetectorDefaultConfig() (*Detector, error) {
+func NewDetectorDefaultConfig(scanType config.GitScanType) (*Detector, error) {
 	viper.SetConfigType("toml")
 	err := viper.ReadConfig(strings.NewReader(config.DefaultConfig))
 	if err != nil {
@@ -134,27 +173,30 @@ func NewDetectorDefaultConfig() (*Detector, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := vc.Translate()
+	cfg, err := vc.Translate(scanType)
 	if err != nil {
 		return nil, err
 	}
-	return NewDetector(cfg), nil
+	return NewDetector(&cfg), nil
 }
 
-func (d *Detector) AddGitleaksIgnore(gitleaksIgnorePath string) error {
-	log.Debug().Msg("found .gitleaksignore file")
+func (d *Detector) LoadGitleaksIgnore(gitleaksIgnorePath string) error {
 	file, err := os.Open(gitleaksIgnorePath)
 
 	if err != nil {
 		return err
 	}
+	log.Debug().Msg("found .gitleaksignore file")
 
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 
+	d.gitleaksIgnoreWriteMutex.Lock()
 	for scanner.Scan() {
 		d.gitleaksIgnore[scanner.Text()] = true
 	}
+	d.gitleaksIgnoreWriteMutex.Unlock()
+
 	return nil
 }
 
@@ -162,11 +204,23 @@ func (d *Detector) AddBaseline(baselinePath string) error {
 	if baselinePath != "" {
 		baseline, err := LoadBaseline(baselinePath)
 		if err != nil {
+			if d.Config.ExitOnFailedBaseline {
+				log.Fatal().Err(err).Msgf("failed to load baseline path: %v", baseline)
+			}
+
 			return err
 		}
-		d.baseline = baseline
+		d.baseline = append(d.baseline, baseline...)
 	}
-	d.baselinePath = baselinePath
+
+	if added := d.Config.BaselinePath.Add(baselinePath); !added {
+		err := fmt.Errorf("failed to add baseline path: %v", baselinePath)
+		if d.Config.ExitOnFailedBaseline {
+			log.Fatal().Err(err)
+		}
+		return err
+	}
+
 	return nil
 }
 
@@ -220,9 +274,9 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 	}
 
 	// If flag configure and raw data size bigger then the flag
-	if d.MaxTargetMegaBytes > 0 {
-		rawLength := len(fragment.Raw) / 1000000
-		if rawLength > d.MaxTargetMegaBytes {
+	if d.Config.MaxTargetMegabytes > 0 {
+		rawLength := uint(len(fragment.Raw) / 1000000)
+		if rawLength > d.Config.MaxTargetMegabytes {
 			log.Debug().Msgf("skipping file: %s scan due to size: %d", fragment.FilePath, rawLength)
 			return findings
 		}
@@ -317,30 +371,30 @@ func (d *Detector) detectRule(fragment Fragment, rule config.Rule) []report.Find
 // GitScan accepts a *gitdiff.File channel which contents a git history generated from
 // the output of `git log -p ...`. startGitScan will look at each file (patch) in the history
 // and determine if the patch contains any findings.
-func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanType) ([]report.Finding, error) {
+func (d *Detector) DetectGit(source string, gitScanType config.GitScanType) ([]report.Finding, error) {
 	var (
 		gitdiffFiles <-chan *gitdiff.File
 		err          error
 	)
 	switch gitScanType {
-	case DetectType:
-		gitdiffFiles, err = git.GitLog(source, logOpts)
+	case config.DetectType:
+		gitdiffFiles, err = git.GitLog(source, d.Config.GitLogOpts)
 		if err != nil {
-			return d.findings, err
+			return d.findings.slice, err
 		}
-	case ProtectType:
+	case config.ProtectType:
 		gitdiffFiles, err = git.GitDiff(source, false)
 		if err != nil {
-			return d.findings, err
+			return d.findings.slice, err
 		}
-	case ProtectStagedType:
+	case config.ProtectStagedType:
 		gitdiffFiles, err = git.GitDiff(source, true)
 		if err != nil {
-			return d.findings, err
+			return d.findings.slice, err
 		}
 	}
 
-	s := semgroup.NewGroup(context.Background(), 4)
+	s := semgroup.NewGroup(context.Background(), int64(d.Config.MaxWorkers))
 
 	for gitdiffFile := range gitdiffFiles {
 		gitdiffFile := gitdiffFile
@@ -381,14 +435,14 @@ func (d *Detector) DetectGit(source string, logOpts string, gitScanType GitScanT
 	}
 
 	if err := s.Wait(); err != nil {
-		return d.findings, err
+		return d.findings.slice, err
 	}
 	log.Info().Msgf("%d commits scanned.", len(d.commitMap))
 	log.Debug().Msg("Note: this number might be smaller than expected due to commits with no additions")
 	if git.ErrEncountered {
-		return d.findings, fmt.Errorf("%s", "git error encountered, see logs")
+		return d.findings.slice, fmt.Errorf("%s", "git error encountered, see logs")
 	}
-	return d.findings, nil
+	return d.findings.slice, nil
 }
 
 type scanTarget struct {
@@ -396,87 +450,115 @@ type scanTarget struct {
 	Symlink string
 }
 
+// Scan a specific scanTarget
+func (d *Detector) scanFilePath(target scanTarget) error {
+	b, err := os.ReadFile(target.Path)
+	if err != nil {
+		return fmt.Errorf("Failed to read file at path: %v.\nerr=%v", target.Path, err)
+	}
+
+	mimetype, err := filetype.Match(b)
+	if err != nil {
+		return err
+	}
+	if mimetype.MIME.Type == "application" {
+		return nil // skip binary files
+	}
+
+	fragment := Fragment{
+		Raw:      string(b),
+		FilePath: target.Path,
+	}
+
+	if target.Symlink != "" {
+		fragment.SymlinkFile = target.Symlink
+	}
+
+	for _, finding := range d.Detect(fragment) {
+		// need to add 1 since line counting starts at 1
+		finding.EndLine++
+		finding.StartLine++
+
+		log.Debug().Msgf("Finding found in %v", target.Path)
+		d.addFinding(finding)
+	}
+
+	return nil
+}
+
 // DetectFiles accepts a path to a source directory or file and begins a scan of the
 // file or directory.
-func (d *Detector) DetectFiles(source string) ([]report.Finding, error) {
-	s := semgroup.NewGroup(context.Background(), 4)
-	paths := make(chan scanTarget)
-	s.Go(func() error {
-		defer close(paths)
-		return filepath.Walk(source,
-			func(path string, fInfo os.FileInfo, err error) error {
-				if err != nil {
-					return err
-				}
-				if fInfo.Name() == ".git" && fInfo.IsDir() {
-					return filepath.SkipDir
-				}
-				if fInfo.Size() == 0 {
-					return nil
-				}
-				if fInfo.Mode().IsRegular() {
-					paths <- scanTarget{
-						Path:    path,
-						Symlink: "",
-					}
-				}
-				if fInfo.Mode().Type() == fs.ModeSymlink && d.FollowSymlinks {
-					realPath, err := filepath.EvalSymlinks(path)
+func (d *Detector) DetectFiles(sources []string) ([]report.Finding, error) {
+	sourcePathIterators := semgroup.NewGroup(context.Background(), int64(d.Config.MaxWorkers))
+	paths := NewThreadSafeSlice(make([]scanTarget, 0))
+
+	// Walk over each source path
+	for _, source := range sources {
+		sourcePath := source
+		sourcePathIterators.Go(func() error {
+			return filepath.Walk(sourcePath,
+				func(path string, fInfo os.FileInfo, err error) error {
 					if err != nil {
 						return err
 					}
-					realPathFileInfo, _ := os.Stat(realPath)
-					if realPathFileInfo.IsDir() {
-						log.Debug().Msgf("found symlinked directory: %s -> %s [skipping]", path, realPath)
+					if fInfo.Name() == ".git" && fInfo.IsDir() {
+						return filepath.SkipDir
+					}
+					if fInfo.Size() == 0 {
 						return nil
 					}
-					paths <- scanTarget{
-						Path:    realPath,
-						Symlink: path,
+					if fInfo.Mode().IsRegular() {
+						// Otherwise, scan the file
+						paths.Append(
+							scanTarget{
+								Path:    path,
+								Symlink: "",
+							})
 					}
-				}
-				return nil
-			})
-	})
-	for pa := range paths {
-		p := pa
-		s.Go(func() error {
-			b, err := os.ReadFile(p.Path)
-			if err != nil {
-				return err
-			}
+					if fInfo.Mode().Type() == fs.ModeSymlink && d.Config.DetectConfig.FollowSymlinks {
+						realPath, err := filepath.EvalSymlinks(path)
+						if err != nil {
+							return err
+						}
+						realPathFileInfo, _ := os.Stat(realPath)
 
-			mimetype, err := filetype.Match(b)
-			if err != nil {
-				return err
-			}
-			if mimetype.MIME.Type == "application" {
-				return nil // skip binary files
-			}
+						if realPathFileInfo.IsDir() {
+							log.Debug().Msgf("found symlinked directory: %s -> %s [skipping]", path, realPath)
+							return nil
+						}
 
-			fragment := Fragment{
-				Raw:      string(b),
-				FilePath: p.Path,
-			}
-			if p.Symlink != "" {
-				fragment.SymlinkFile = p.Symlink
-			}
-			for _, finding := range d.Detect(fragment) {
-				// need to add 1 since line counting starts at 1
-				finding.EndLine++
-				finding.StartLine++
-				d.addFinding(finding)
-			}
-
-			return nil
+						paths.Append(scanTarget{
+							Path:    realPath,
+							Symlink: path,
+						})
+					}
+					return nil
+				})
 		})
 	}
 
-	if err := s.Wait(); err != nil {
-		return d.findings, err
+	// Wait for all paths to be enumerated.
+	err := sourcePathIterators.Wait()
+	if err != nil {
+		log.Error().Msg("hit error(s) when iterating over source path files.")
+		return d.findings.slice, err
 	}
 
-	return d.findings, nil
+	// Scan each file concurrently.
+	pathIterators := semgroup.NewGroup(context.Background(), int64(d.Config.MaxWorkers))
+
+	for _, pa := range paths.slice {
+		p := pa
+		pathIterators.Go(func() error {
+			return d.scanFilePath(p)
+		})
+	}
+
+	if err := pathIterators.Wait(); err != nil {
+		return d.findings.slice, err
+	}
+
+	return d.findings.slice, nil
 }
 
 // DetectReader accepts an io.Reader and a buffer size for the reader in KB
@@ -500,7 +582,7 @@ func (d *Detector) DetectReader(r io.Reader, bufSize int) ([]report.Finding, err
 		}
 		for _, finding := range d.Detect(fragment) {
 			findings = append(findings, finding)
-			if d.Verbose {
+			if d.Config.Verbose {
 				printFinding(finding)
 			}
 		}
@@ -518,7 +600,11 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 
 	// check if filepath is allowed
 	if fragment.FilePath != "" && (d.Config.Allowlist.PathAllowed(fragment.FilePath) ||
-		fragment.FilePath == d.Config.Path || (d.baselinePath != "" && fragment.FilePath == d.baselinePath)) {
+		d.Config.Path.Contains(fragment.FilePath) ||
+		d.Config.BaselinePath.Contains(fragment.FilePath) ||
+		(d.Config.DetectConfig != nil &&
+			d.Config.DetectConfig.GitleaksIgnore != nil &&
+			d.Config.DetectConfig.GitleaksIgnore.Contains(fragment.FilePath))) {
 		return findings
 	}
 
@@ -534,7 +620,7 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 
 	for _, rule := range d.Config.Rules {
 		if len(rule.Keywords) == 0 {
-			// if not keywords are associated with the rule always scan the
+			// if no keywords are associated with the rule always scan the
 			// fragment using the rule
 			findings = append(findings, d.detectRule(fragment, rule)...)
 			continue
@@ -550,7 +636,7 @@ func (d *Detector) Detect(fragment Fragment) []report.Finding {
 			findings = append(findings, d.detectRule(fragment, rule)...)
 		}
 	}
-	return filter(findings, d.Redact)
+	return filter(findings, d.Config.Redact)
 }
 
 // addFinding synchronously adds a finding to the findings slice
@@ -572,12 +658,11 @@ func (d *Detector) addFinding(finding report.Finding) {
 		return
 	}
 
-	d.findingMutex.Lock()
-	d.findings = append(d.findings, finding)
-	if d.Verbose {
+	d.findings.Append(finding)
+
+	if d.Config.Verbose {
 		printFinding(finding)
 	}
-	d.findingMutex.Unlock()
 }
 
 // addCommit synchronously adds a commit to the commit slice

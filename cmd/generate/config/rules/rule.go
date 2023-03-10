@@ -64,7 +64,7 @@ func validate(r config.Rule, truePositives []string, falsePositives []string) *c
 
 	rules := make(map[string]config.Rule)
 	rules[r.RuleID] = r
-	d := detect.NewDetector(config.Config{
+	d := detect.NewDetector(&config.Config{
 		Rules:    rules,
 		Keywords: keywords,
 	})

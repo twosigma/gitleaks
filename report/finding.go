@@ -44,7 +44,7 @@ type Finding struct {
 
 // Redact removes sensitive information from a finding.
 func (f *Finding) Redact() {
-	f.Lines = strings.Replace(f.Lines, f.Secret, "REDACTED", -1)
-	f.Match = strings.Replace(f.Match, f.Secret, "REDACTED", -1)
+	f.Lines = strings.ReplaceAll(f.Lines, f.Secret, "REDACTED")
+	f.Match = strings.ReplaceAll(f.Match, f.Secret, "REDACTED")
 	f.Secret = "REDACTED"
 }

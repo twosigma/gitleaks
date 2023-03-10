@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -15,8 +14,10 @@ import (
 )
 
 func init() {
+	// Pass to detect API
+
+	// Don't pass to detect API
 	protectCmd.Flags().Bool("staged", false, "detect secrets in a --staged state")
-	protectCmd.Flags().String("log-opts", "", "git log options")
 	rootCmd.AddCommand(protectCmd)
 }
 
@@ -27,74 +28,54 @@ var protectCmd = &cobra.Command{
 }
 
 func runProtect(cmd *cobra.Command, args []string) {
-	initConfig()
+	staged, _ := cmd.Flags().GetBool("staged")
+	sourcePaths := config.LoadSourcePaths(args)
+
+	if len(sourcePaths) > 1 {
+		log.Fatal().Msgf("Cannot protect more than one git repository at a time. Pass one repo path.")
+	}
+
+	parentConfig := initConfig(sourcePaths)
+
+	var mode config.GitScanType
+	if staged {
+		mode = config.ProtectStagedType
+	} else {
+		mode = config.ProtectType
+	}
+
+	start := time.Now()
 	var vc config.ViperConfig
 
 	if err := viper.Unmarshal(&vc); err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
-	cfg, err := vc.Translate()
+	cfg, err := vc.Translate(mode)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
 
-	cfg.Path, _ = cmd.Flags().GetString("config")
-	exitCode, _ := cmd.Flags().GetInt("exit-code")
-	staged, _ := cmd.Flags().GetBool("staged")
-	start := time.Now()
+	cfg.SetParentPath(parentConfig)
+	unmarshallCobraFlagsRoot(&cfg, cmd)
+	unmarshallCobraFlagsProtect(&cfg, cmd)
 
 	// Setup detector
-	detector := detect.NewDetector(cfg)
-	detector.Config.Path, err = cmd.Flags().GetString("config")
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-	source, err := cmd.Flags().GetString("source")
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-	// if config path is not set, then use the {source}/.gitleaks.toml path.
-	// note that there may not be a `{source}/.gitleaks.toml` file, this is ok.
-	if detector.Config.Path == "" {
-		detector.Config.Path = filepath.Join(source, ".gitleaks.toml")
-	}
-	// set verbose flag
-	if detector.Verbose, err = cmd.Flags().GetBool("verbose"); err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-	// set redact flag
-	if detector.Redact, err = cmd.Flags().GetBool("redact"); err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
+	detector := detect.NewDetector(&cfg)
 
-	if detector.MaxTargetMegaBytes, err = cmd.Flags().GetInt("max-target-megabytes"); err != nil {
-		log.Fatal().Err(err).Msg("")
-	}
-
-	// get log options for git scan
-	logOpts, err := cmd.Flags().GetString("log-opts")
-	if err != nil {
-		log.Fatal().Err(err).Msg("")
+	if err = detector.LoadBaselineFilesFromConfig(); err != nil {
+		log.Warn().Err(err)
 	}
 
 	// start git scan
 	var findings []report.Finding
-	if staged {
-		findings, err = detector.DetectGit(source, logOpts, detect.ProtectStagedType)
-	} else {
-		findings, err = detector.DetectGit(source, logOpts, detect.ProtectType)
-	}
-	if err != nil {
-		// don't exit on error, just log it
-		log.Error().Err(err).Msg("")
-	}
+	findings, err = detector.DetectGit(sourcePaths[0], mode)
+	duration := FormatDuration(time.Since(start))
 
-	// log info about the scan
-	log.Info().Msgf("scan completed in %s", FormatDuration(time.Since(start)))
-	if len(findings) != 0 {
-		log.Warn().Msgf("leaks found: %d", len(findings))
+	// log info about scan.
+	if err == nil {
+		logScanSuccess(duration, findings)
 	} else {
-		log.Info().Msg("no leaks found")
+		logScanFailure(duration, findings)
 	}
 
 	reportPath, _ := cmd.Flags().GetString("report-path")
@@ -104,7 +85,17 @@ func runProtect(cmd *cobra.Command, args []string) {
 			log.Fatal().Err(err).Msg("")
 		}
 	}
+
+	// set exit code
+	exitCode, err := cmd.Flags().GetInt("exit-code")
+	if err != nil {
+		log.Fatal().Err(err).Msg("could not get exit code")
+	}
+
 	if len(findings) != 0 {
 		os.Exit(exitCode)
 	}
 }
+
+// unmarshallCobraFlagsProtect updates a Detect API configuration structure with values passed by Cobra.
+func unmarshallCobraFlagsProtect(cfg *config.Config, cmd *cobra.Command) {}

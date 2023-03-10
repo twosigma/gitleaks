@@ -2,7 +2,9 @@ package detect
 
 import (
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -371,15 +373,15 @@ func TestDetect(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, err := vc.Translate()
-		cfg.Path = filepath.Join(configPath, tt.cfgName+".toml")
+		cfg, err := vc.Translate(config.DetectType)
+		cfg.SetParentPath(filepath.Join(configPath, tt.cfgName+".toml"))
 		if tt.wantError != nil {
 			if err == nil {
 				t.Errorf("expected error")
 			}
 			assert.Equal(t, tt.wantError, err)
 		}
-		d := NewDetector(cfg)
+		d := NewDetector(&cfg)
 
 		findings := d.Detect(tt.fragment)
 		assert.ElementsMatch(t, tt.expectedFindings, findings)
@@ -494,12 +496,14 @@ func TestFromGit(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, err := vc.Translate()
+		cfg, err := vc.Translate(config.DetectType)
 		if err != nil {
 			t.Error(err)
 		}
-		detector := NewDetector(cfg)
-		findings, err := detector.DetectGit(tt.source, tt.logOpts, DetectType)
+
+		cfg.GitLogOpts = tt.logOpts
+		detector := NewDetector(&cfg)
+		findings, err := detector.DetectGit(tt.source, config.DetectType)
 		if err != nil {
 			t.Error(err)
 		}
@@ -515,11 +519,12 @@ func TestFromGit(t *testing.T) {
 func TestFromFiles(t *testing.T) {
 	tests := []struct {
 		cfgName          string
-		source           string
+		sources          []string
+		configPaths      mapset.Set[string]
 		expectedFindings []report.Finding
 	}{
 		{
-			source:  filepath.Join(repoBasePath, "nogit"),
+			sources: []string{filepath.Join(repoBasePath, "nogit")},
 			cfgName: "simple",
 			expectedFindings: []report.Finding{
 				{
@@ -541,7 +546,7 @@ func TestFromFiles(t *testing.T) {
 			},
 		},
 		{
-			source:  filepath.Join(repoBasePath, "nogit", "main.go"),
+			sources: []string{filepath.Join(repoBasePath, "nogit", "main.go")},
 			cfgName: "simple",
 			expectedFindings: []report.Finding{
 				{
@@ -561,6 +566,15 @@ func TestFromFiles(t *testing.T) {
 				},
 			},
 		},
+		{
+			cfgName: "multiple_gitleaks_ignore_files",
+			sources: []string{filepath.Join(repoBasePath, "nogit_multi_ignore")},
+			configPaths: mapset.NewSet[string](
+				filepath.Join(repoBasePath, "nogit_multi_ignore", ".gitleaksignore"),
+				filepath.Join(repoBasePath, "nogit_multi_ignore", ".gitleaksignore2"),
+			),
+			expectedFindings: []report.Finding{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -577,10 +591,17 @@ func TestFromFiles(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, _ := vc.Translate()
-		detector := NewDetector(cfg)
-		detector.FollowSymlinks = true
-		findings, err := detector.DetectFiles(tt.source)
+		cfg, _ := vc.Translate(config.DetectType)
+		cfg.DetectConfig.FollowSymlinks = true
+
+		cfg.DetectConfig.GitleaksIgnore = tt.configPaths
+		detector := NewDetector(&cfg)
+
+		if err = detector.AddIgnoreFilesFromConfig(); err != nil {
+			t.Error(err)
+		}
+
+		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
 		}
@@ -592,11 +613,11 @@ func TestFromFiles(t *testing.T) {
 func TestDetectWithSymlinks(t *testing.T) {
 	tests := []struct {
 		cfgName          string
-		source           string
+		sources          []string
 		expectedFindings []report.Finding
 	}{
 		{
-			source:  filepath.Join(repoBasePath, "symlinks/file_symlink"),
+			sources: []string{filepath.Join(repoBasePath, "symlinks/file_symlink")},
 			cfgName: "simple",
 			expectedFindings: []report.Finding{
 				{
@@ -633,10 +654,10 @@ func TestDetectWithSymlinks(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, _ := vc.Translate()
-		detector := NewDetector(cfg)
-		detector.FollowSymlinks = true
-		findings, err := detector.DetectFiles(tt.source)
+		cfg, _ := vc.Translate(config.DetectType)
+		cfg.DetectConfig.FollowSymlinks = true
+		detector := NewDetector(&cfg)
+		findings, err := detector.DetectFiles(tt.sources)
 		if err != nil {
 			t.Error(err)
 		}
@@ -673,4 +694,32 @@ func moveDotGit(from, to string) error {
 		}
 	}
 	return nil
+}
+
+// Tests that detector exits when in exit-on-failed-ignore is enabled.
+func TestExitOnFailedIgnore(t *testing.T) {
+	// Note: These tests won't show up in coverage ;(
+	// https://stackoverflow.com/questions/26225513/how-to-test-os-exit-scenarios-in-go
+	// https://go.dev/talks/2014/testing.slide#23
+	if os.Getenv("CRASHING_PROCESS_EXIT_ON_FAILED_IGNORE") == "1" {
+		config := config.Config{
+			DetectConfig: &config.DetectConfig{
+				GitleaksIgnore:     mapset.NewSet[string]("../testdata/noexist/.gitleaksignore"),
+				ExitOnFailedIgnore: true,
+			},
+		}
+		d := NewDetector(&config)
+		d.AddIgnoreFilesFromConfig()
+		return
+	}
+
+	// Check that LoadBaselineFilesFromConfig fails
+	cmd := exec.Command(os.Args[0], "-test.run=TestExitOnFailedIgnore")
+	cmd.Env = append(os.Environ(), "CRASHING_PROCESS_EXIT_ON_FAILED_IGNORE=1")
+	err := cmd.Run()
+
+	// Something went wrong if the process exited with 0, OR did not return an exit error.
+	if e, ok := err.(*exec.ExitError); !ok || e.Success() {
+		t.Fatalf("gitleaks FAILED to crash when exit-on-failed-ignore was enabled. AddIgnoreFilesFromConfig failed to crash")
+	}
 }

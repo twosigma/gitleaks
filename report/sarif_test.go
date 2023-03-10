@@ -69,7 +69,7 @@ func TestWriteSarif(t *testing.T) {
 			t.Error(err)
 		}
 
-		cfg, err := vc.Translate()
+		cfg, err := vc.Translate(config.DetectType)
 		if err != nil {
 			t.Error(err)
 		}

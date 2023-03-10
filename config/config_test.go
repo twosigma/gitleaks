@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
+	"path/filepath"
 	"regexp"
 	"testing"
 
@@ -116,6 +118,7 @@ func TestTranslate(t *testing.T) {
 						RuleID:      "aws-secret-key-again",
 					},
 				},
+				Path: mapset.NewSet[string]("../testdata/config/base.toml", "../testdata/config/extend_1.toml", "../testdata/config/extend_2.toml"),
 			},
 		},
 	}
@@ -135,14 +138,58 @@ func TestTranslate(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		cfg, err := vc.Translate()
+		cfg, err := vc.Translate(DetectType)
+		cfg.SetParentPath(filepath.Join(configPath, tt.cfgName+".toml"))
 		if tt.wantError != nil {
 			if err == nil {
 				t.Errorf("expected error")
 			}
 			assert.Equal(t, tt.wantError, err)
 		}
-
 		assert.Equal(t, cfg.Rules, tt.cfg.Rules)
+		if tt.cfg.Path != nil {
+			symDiff := tt.cfg.Path.SymmetricDifference(cfg.Path)
+			assert.Equal(t, 0, symDiff.Cardinality())
+		}
+	}
+}
+
+func TestConfig_SetParentPath(t *testing.T) {
+	type args struct {
+		parentPath string
+	}
+	tests := []struct {
+		name  string
+		path  string
+		field Config
+	}{
+		{
+			name: "test_nil_path_mapset",
+			path: "/some/path",
+			field: Config{
+				Path: nil,
+			},
+		},
+		{
+			name: "test_non_nil_path_mapset",
+			path: "/some/path",
+			field: Config{
+				Path: mapset.NewSet[string](),
+			},
+		},
+		{
+			name: "test_non_empty_path_mapset",
+			path: "/some/path",
+			field: Config{
+				Path: mapset.NewSet[string]("/some/other/path"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.field.SetParentPath(tt.path)
+			assert.NotNil(t, tt.field.Path)
+			assert.True(t, tt.field.Path.Contains(tt.path))
+		})
 	}
 }

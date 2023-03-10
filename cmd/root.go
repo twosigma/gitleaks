@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/zricethezav/gitleaks/v8/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,8 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	"github.com/zricethezav/gitleaks/v8/config"
 )
 
 const banner = `
@@ -27,7 +27,7 @@ const configDescription = `config file path
 order of precedence:
 1. --config/-c
 2. env var GITLEAKS_CONFIG
-3. (--source/-s)/.gitleaks.toml
+3. sources passed on command line. (Defaults to $PWD)
 If none of the three options are used, then gitleaks will use the default config`
 
 var rootCmd = &cobra.Command{
@@ -38,20 +38,25 @@ var rootCmd = &cobra.Command{
 func init() {
 	cobra.OnInitialize(initLog)
 	rootCmd.PersistentFlags().StringP("config", "c", "", configDescription)
+
+	// Not passed to Detector API
 	rootCmd.PersistentFlags().Int("exit-code", 1, "exit code when leaks have been encountered")
-	rootCmd.PersistentFlags().StringP("source", "s", ".", "path to source (default: $PWD)")
 	rootCmd.PersistentFlags().StringP("report-path", "r", "", "report file")
 	rootCmd.PersistentFlags().StringP("report-format", "f", "json", "output format (json, csv, sarif)")
-	rootCmd.PersistentFlags().StringP("baseline-path", "b", "", "path to baseline with issues that can be ignored")
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "log level (trace, debug, info, warn, error, fatal)")
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
-	rootCmd.PersistentFlags().Int("max-target-megabytes", 0, "files larger than this will be skipped")
-	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
 	rootCmd.PersistentFlags().Bool("no-banner", false, "suppress banner")
-	err := viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	if err != nil {
-		log.Fatal().Msgf("err binding config %s", err.Error())
-	}
+
+	// Passed to Detector API
+	rootCmd.PersistentFlags().StringSliceP("baseline-path", "b", []string{}, "path(s) to baseline file with issues that can be ignored")
+	rootCmd.PersistentFlags().String("log-opts", "", "git log options")
+	rootCmd.PersistentFlags().Uint("max-target-megabytes", 0, "files larger than this will be skipped")
+	rootCmd.PersistentFlags().UintP("max-workers", "j", 16, "maximum number of worker threads scanning files concurrently. Default value of 16")
+	rootCmd.PersistentFlags().Bool("redact", false, "redact secrets from logs and stdout")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "show verbose output from scan")
+	rootCmd.PersistentFlags().Bool("exit-on-failed-baseline", true, "exit if Gitleaks fails to parse a baseline file")
+
+	// Deprecated
+	rootCmd.PersistentFlags().StringP("source", "s", ".", "path to source (default: $PWD)")
 }
 
 func initLog() {
@@ -76,9 +81,8 @@ func initLog() {
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
-}
 
-func initConfig() {
+	// Set banner config
 	hideBanner, err := rootCmd.Flags().GetBool("no-banner")
 	if err != nil {
 		log.Fatal().Msg(err.Error())
@@ -86,55 +90,138 @@ func initConfig() {
 	if !hideBanner {
 		_, _ = fmt.Fprint(os.Stderr, banner)
 	}
+}
+
+// initConfig is responsible for identifying the location of the Viper configuration. returns config path if it exists
+func initConfig(sourcePaths []string) string {
+	var sourcePath string
 	cfgPath, err := rootCmd.Flags().GetString("config")
 	if err != nil {
 		log.Fatal().Msg(err.Error())
 	}
-	if cfgPath != "" {
+
+	switch {
+	case cfgPath != "":
 		viper.SetConfigFile(cfgPath)
 		log.Debug().Msgf("using gitleaks config %s from `--config`", cfgPath)
-	} else if os.Getenv("GITLEAKS_CONFIG") != "" {
+		sourcePath = cfgPath
+	case os.Getenv("GITLEAKS_CONFIG") != "":
 		envPath := os.Getenv("GITLEAKS_CONFIG")
 		viper.SetConfigFile(envPath)
 		log.Debug().Msgf("using gitleaks config from GITLEAKS_CONFIG env var: %s", envPath)
-	} else {
-		source, err := rootCmd.Flags().GetString("source")
-		if err != nil {
-			log.Fatal().Msg(err.Error())
+		sourcePath = envPath
+	default:
+		if len(sourcePaths) > 1 {
+			log.Warn().Msg("multiple source files passed without explicitly specifying gitleaks configuration! using default config")
+			config.LoadDefaultViperConfig()
+			return ""
 		}
+
+		source := sourcePaths[0]
+		sourcePath := filepath.Join(source, ".gitleaks.toml")
+
 		fileInfo, err := os.Stat(source)
 		if err != nil {
 			log.Fatal().Msg(err.Error())
 		}
 
 		if !fileInfo.IsDir() {
-			log.Debug().Msgf("unable to load gitleaks config from %s since --source=%s is a file, using default config",
-				filepath.Join(source, ".gitleaks.toml"), source)
-			viper.SetConfigType("toml")
-			if err = viper.ReadConfig(strings.NewReader(config.DefaultConfig)); err != nil {
-				log.Fatal().Msgf("err reading toml %s", err.Error())
-			}
-			return
+			log.Debug().Msgf("unable to load gitleaks config from %s since it is a file, using default config",
+				sourcePath)
+			config.LoadDefaultViperConfig()
+			return ""
 		}
 
-		if _, err := os.Stat(filepath.Join(source, ".gitleaks.toml")); os.IsNotExist(err) {
-			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", filepath.Join(source, ".gitleaks.toml"))
-			viper.SetConfigType("toml")
-			if err = viper.ReadConfig(strings.NewReader(config.DefaultConfig)); err != nil {
-				log.Fatal().Msgf("err reading default config toml %s", err.Error())
-			}
-			return
-		} else {
-			log.Debug().Msgf("using existing gitleaks config %s from `(--source)/.gitleaks.toml`", filepath.Join(source, ".gitleaks.toml"))
+		if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
+			log.Debug().Msgf("no gitleaks config found in path %s, using default gitleaks config", sourcePath)
+			config.LoadDefaultViperConfig()
+			return ""
 		}
 
-		viper.AddConfigPath(source)
-		viper.SetConfigName(".gitleaks")
-		viper.SetConfigType("toml")
+		log.Debug().Msgf("using existing gitleaks config %s", sourcePath)
+		viper.SetConfigFile(sourcePath)
 	}
+
+	// If this line is reached, default config not in use. As a result, viper needs to be instructed to read the file.
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatal().Msgf("unable to load gitleaks config, err: %s", err)
 	}
+
+	return sourcePath
+}
+
+// unmarshallCobraFlagsRoot updates a Detect API configuration structure with values passed by Cobra.
+// This is favored over viper.BindPflag because the function allows us to override a viper parameter
+// if and only if viper left the value unset, or the user explicitly set the parameter using Cobra.
+func unmarshallCobraFlagsRoot(config *config.Config, cmd *cobra.Command) {
+	var err error
+
+	// TODO: This code is repetitive. Would be nice to use generics here somehow
+	baselinePathsChanged := cmd.Flags().Changed("baseline-path")
+	baselinePathSetByViper := viper.IsSet("BaselinePath")
+	if baselinePathsChanged || !baselinePathSetByViper {
+		var baselinePathSlice []string
+		baselinePathSlice, err = cmd.Flags().GetStringSlice("baseline-path")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'baseline-paths'")
+		}
+		config.BaselinePath = mapset.NewSet[string](baselinePathSlice...)
+	}
+
+	gitLogOptsChanged := cmd.Flags().Changed("log-opts")
+	gitLogOptsSetByViper := viper.IsSet("GitLogOpts")
+	if gitLogOptsChanged || !gitLogOptsSetByViper {
+		config.GitLogOpts, err = cmd.Flags().GetString("log-opts")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'log-opts'")
+		}
+	}
+
+	maxTargetMegabytesChanged := cmd.Flags().Changed("max-target-megabytes")
+	maxTargetMegabytesSetByViper := viper.IsSet("MaxTargetMegabytes")
+	if maxTargetMegabytesChanged || !maxTargetMegabytesSetByViper {
+		config.MaxTargetMegabytes, err = cmd.Flags().GetUint("max-target-megabytes")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'max-target-megabytes'")
+		}
+	}
+
+	maxWorkersChanged := cmd.Flags().Changed("max-workers")
+	maxWorkersSetByViper := viper.IsSet("MaxWorkers")
+	if maxWorkersChanged || !maxWorkersSetByViper {
+		config.MaxWorkers, err = cmd.Flags().GetUint("max-workers")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'max-workers'")
+		}
+	}
+
+	redactChanged := cmd.Flags().Changed("redact")
+	redactSetByViper := viper.IsSet("Redact")
+	if redactChanged || !redactSetByViper {
+		config.Redact, err = cmd.Flags().GetBool("redact")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'redact'")
+		}
+	}
+
+	verboseChanged := cmd.Flags().Changed("verbose")
+	verboseSetByViper := viper.IsSet("Verbose")
+	if verboseChanged || !verboseSetByViper {
+		config.Verbose, err = cmd.Flags().GetBool("verbose")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'verbose'")
+		}
+	}
+
+	exitOnFailedBaselineChanged := cmd.Flags().Changed("exit-on-failed-baseline")
+	exitOnFailedBaselineeSetByViper := viper.IsSet("ExitOnFailedBaseline")
+	if exitOnFailedBaselineChanged || !exitOnFailedBaselineeSetByViper {
+		config.ExitOnFailedBaseline, err = cmd.Flags().GetBool("exit-on-failed-baseline")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to resolve value of 'exit-on-failed-baseline'")
+		}
+	}
+
 }
 
 func Execute() {
